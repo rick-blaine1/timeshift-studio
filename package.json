@@ -8,7 +8,17 @@
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "docker:dev": "docker-compose -f compose.development.yaml up --build",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:ci": "vitest run --coverage",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:ci": "playwright test --reporter=html",
+    "type-check": "tsc --noEmit",
+    "docker:test": "docker-compose -f compose.test.yaml up --build --abort-on-container-exit",
+    "docker:prod": "docker-compose -f compose.yaml up --build"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -78,6 +88,15 @@
     "tailwindcss": "^3.4.17",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.38.0",
-    "vite": "^5.4.19"
+    "vite": "^5.4.19",
+    "@testing-library/react": "^14.1.2",
+    "@testing-library/jest-dom": "^6.1.5",
+    "@testing-library/user-event": "^14.5.1",
+    "vitest": "^1.0.4",
+    "jsdom": "^23.0.1",
+    "@vitest/ui": "^1.0.4",
+    "msw": "^2.0.11",
+    "playwright": "^1.40.1",
+    "@playwright/test": "^1.40.1"
   }
 }

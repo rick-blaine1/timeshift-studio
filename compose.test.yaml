@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile.production # Use production Dockerfile for building to ensure all dependencies are resolved
+      target: tester # Build up to the tester stage
+    container_name: timelapse-editor-test
+    command: npm run test:ci # Run the CI test command
+    volumes:
+      - .:/app
+      - /app/node_modules

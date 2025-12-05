@@ -103,7 +103,7 @@ export function Timeline({
       >
         {clips.length === 0 ? (
           <div className="flex items-center justify-center h-16 text-sm text-muted-foreground">
-            <p>Drag clips here to build your timelapse</p>
+            <p>Drop clips here to start building your timelapse</p>
           </div>
         ) : (
           <>
@@ -118,6 +118,7 @@ export function Timeline({
                 return (
                   <div
                     key={clip.id}
+                    data-testid="timeline-clip"
                     draggable
                     onDragStart={() => handleDragStart(index)}
                     onDragOver={(e) => handleDragOver(e, index)}

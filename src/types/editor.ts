@@ -1,33 +1,12 @@
-export interface VideoFile {
-  id: string;
-  name: string;
-  duration: number;
-  thumbnail: string;
-  resolution: string;
-  size: number;
-  status: 'ready' | 'on-timeline' | 'error' | 'uploading';
-  file?: File;
-}
+import { z } from 'zod';
+import { VideoFileSchemaValidator, TimelineClipSchemaValidator, ProjectSchemaValidator, ExportSettingsSchemaValidator } from './schema/validation';
 
-export interface TimelineClip {
-  id: string;
-  fileId: string;
-  startTime: number;
-  duration: number;
-}
+export type VideoFile = z.infer<typeof VideoFileSchemaValidator>;
 
-export interface ProjectState {
-  files: VideoFile[];
-  timeline: TimelineClip[];
-  speedMultiplier: number;
-  previewQuality: 'proxy' | 'high';
-  currentTime: number;
-  isPlaying: boolean;
-}
+export type TimelineClip = z.infer<typeof TimelineClipSchemaValidator>;
 
-export interface ExportSettings {
-  resolution: string;
-  estimatedDuration: number;
-}
+export type ProjectState = z.infer<typeof ProjectSchemaValidator>;
+
+export type ExportSettings = z.infer<typeof ExportSettingsSchemaValidator>;
 
 export type ExportStatus = 'idle' | 'preparing' | 'encoding' | 'packaging' | 'done' | 'error';

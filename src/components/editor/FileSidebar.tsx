@@ -6,11 +6,12 @@ import { FolderOpen } from 'lucide-react';
 interface FileSidebarProps {
   files: VideoFile[];
   onAddFiles: (files: VideoFile[]) => void;
+  onUpdateFiles?: (files: VideoFile[]) => void;
   onRemoveFile: (fileId: string) => void;
   onAddToTimeline: (fileId: string) => void;
 }
 
-export function FileSidebar({ files, onAddFiles, onRemoveFile, onAddToTimeline }: FileSidebarProps) {
+export function FileSidebar({ files, onAddFiles, onUpdateFiles, onRemoveFile, onAddToTimeline }: FileSidebarProps) {
   return (
     <div className="flex flex-col h-full bg-card border-r">
       <div className="p-4 border-b">
@@ -42,7 +43,11 @@ export function FileSidebar({ files, onAddFiles, onRemoveFile, onAddToTimeline }
       </div>
 
       <div className="p-3 border-t">
-        <UploadArea onFilesAdded={onAddFiles} variant="compact" />
+        <UploadArea
+          onFilesAdded={onAddFiles}
+          onFilesUpdated={onUpdateFiles}
+          variant="compact"
+        />
       </div>
     </div>
   );

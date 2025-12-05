@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.development
+    container_name: timelapse-editor-dev
+    ports:
+      - "8080:8080"
+      - "9229:9229" # For debugging
+    volumes:
+      - .:/app
+      - /app/node_modules
+    environment:
+      NODE_ENV: development
+    command: npm run dev

@@ -17,17 +17,28 @@ export function FileCard({ file, onRemove, onAddToTimeline, isDragging }: FileCa
     'on-timeline': { icon: Check, label: 'On timeline', className: 'bg-success/10 text-success' },
     error: { icon: AlertCircle, label: 'Error', className: 'bg-destructive/10 text-destructive' },
     uploading: { icon: Clock, label: 'Uploading', className: 'bg-primary/10 text-primary' },
+    processing: { icon: Clock, label: 'Processing', className: 'bg-primary/10 text-primary' },
   };
 
-  const status = statusConfig[file.status];
+  const status = statusConfig[file.status] || statusConfig.ready;
   const StatusIcon = status.icon;
+
+  const handleDragStart = (e: React.DragEvent) => {
+    e.dataTransfer.setData('fileId', file.id);
+    e.dataTransfer.effectAllowed = 'copy';
+  };
+
+  const resolution = `${file.width}x${file.height}`;
 
   return (
     <div
+      draggable={file.status === 'ready'}
+      onDragStart={handleDragStart}
       className={cn(
         'group relative bg-card rounded-lg border shadow-card overflow-hidden transition-all duration-200',
         isDragging && 'shadow-elevated scale-[1.02] ring-2 ring-primary',
-        !isDragging && 'hover:shadow-card-hover'
+        !isDragging && 'hover:shadow-card-hover',
+        file.status === 'ready' && 'cursor-grab active:cursor-grabbing'
       )}
     >
       <div className="flex gap-3 p-3">
@@ -57,7 +68,7 @@ export function FileCard({ file, onRemove, onAddToTimeline, isDragging }: FileCa
             {file.name}
           </p>
           <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
-            <span>{file.resolution}</span>
+            <span>{resolution}</span>
             <span>•</span>
             <span>{formatFileSize(file.size)}</span>
           </div>
