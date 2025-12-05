@@ -1,12 +1,25 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { useEditorState } from '@/hooks/useEditorState';
+import { LandingScreen } from '@/components/editor/LandingScreen';
+import { TopNav } from '@/components/editor/TopNav';
+import { EditorWorkspace } from '@/components/editor/EditorWorkspace';
 
 const Index = () => {
+  const { state, actions } = useEditorState();
+  const hasFiles = state.files.length > 0;
+
+  if (!hasFiles) {
+    return (
+      <LandingScreen
+        onFilesAdded={actions.addFiles}
+        onLoadSample={actions.loadSampleData}
+      />
+    );
+  }
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="mb-4 text-4xl font-bold">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
-      </div>
+    <div className="h-screen flex flex-col overflow-hidden">
+      <TopNav />
+      <EditorWorkspace />
     </div>
   );
 };
