@@ -1,4 +1,4 @@
-# Timeshift Studio - Browser-Based Video Editor
+# Timeshift Studio - Browser-Based Video Editor v0.02
 
 Timeshift Studio is a modern video editing application that runs entirely in the browser. It leverages client-side processing using FFmpeg.wasm and WebCodecs to provide powerful editing capabilities without requiring server-side processing.
 
@@ -94,8 +94,4 @@ timeshift-studio/
 └── docs/                # Project documentation
 ```
 
-## Contributing
-Contributions are welcome! Please follow our coding standards and submit pull requests against the `main` branch.
 
-## License
-[MIT](https://choosealicense.com/licenses/mit/)
