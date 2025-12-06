@@ -1,73 +1,101 @@
-# Welcome to your Lovable project
+# Timeshift Studio - Browser-Based Video Editor
 
-## Project info
+Timeshift Studio is a modern video editing application that runs entirely in the browser. It leverages client-side processing using FFmpeg.wasm and WebCodecs to provide powerful editing capabilities without requiring server-side processing.
 
-**URL**: https://lovable.dev/projects/9620f29f-e96f-419f-bf16-ee0581046274
+## Key Features
+- 🎬 **Client-Side Video Processing**: All editing operations happen in your browser
+- 💾 **Local Storage**: Projects saved using IndexedDB/File System API
+- ⚡ **Performance Optimized**: Web Workers for background processing
+- 🧩 **Custom React Hooks**: State management via `useEditorState`
+- 🎨 **Tailwind CSS Styling**: Custom palette (`timeline-bg`, `timeline-clip`)
+- 📦 **Docker Deployment**: Containerized development and production environments
 
-## How can I edit this code?
+## System Requirements
+- Modern browser (Chrome, Firefox, Edge)
+- 4GB+ RAM recommended for larger projects
 
-There are several ways of editing your application.
+## Getting Started
 
-**Use Lovable**
+### Prerequisites
+- Node.js v18+
+- npm v9+
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/9620f29f-e96f-419f-bf16-ee0581046274) and start prompting.
+### Installation
+```bash
+# Clone repository
+git clone https://github.com/your-org/timeshift-studio.git
+cd timeshift-studio
 
-Changes made via Lovable will be committed automatically to this repo.
+# Install dependencies
+npm install
+```
 
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+### Running Locally
+```bash
+# Start development server
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+## Docker Setup
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+### Development Environment
+```bash
+npm run docker:dev
+```
 
-**Use GitHub Codespaces**
+### Production Build
+```bash
+npm run docker:prod
+```
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## Testing
 
-## What technologies are used for this project?
+### Unit Tests
+```bash
+npm test
+```
 
-This project is built with:
+### End-to-End Tests
+```bash
+npm run test:e2e
+```
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+### Docker-Based Testing
+```bash
+npm run docker:test
+```
 
-## How can I deploy this project?
+## Deployment
+Production deployments use the optimized Docker production image:
+```bash
+docker-compose -f compose.yaml up --build
+```
 
-Simply open [Lovable](https://lovable.dev/projects/9620f29f-e96f-419f-bf16-ee0581046274) and click on Share -> Publish.
+## Important Notes
+1. **FFmpeg Initialization**: Must call `initFFmpeg()` before using video processing features
+2. **Memory Management**: 
+   - Projects capped at 4GB total size
+   - Memory-intensive operations use chunked processing
+3. **Browser Limitations**: 
+   - File System API permissions vary by browser
+   - Speed adjustments require video re-encoding
+4. **Performance Considerations**: 
+   - Quality presets affect export performance and file size
+   - Use sequential queues for batch operations
 
-## Can I connect a custom domain to my Lovable project?
+## Project Structure
+```
+timeshift-studio/
+├── src/                 # Application source code
+├── tests/               # Test files
+├── public/              # Static assets
+├── docker/              # Docker configuration files
+├── .roo/                # Agent documentation
+└── docs/                # Project documentation
+```
 
-Yes, you can!
+## Contributing
+Contributions are welcome! Please follow our coding standards and submit pull requests against the `main` branch.
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+## License
+[MIT](https://choosealicense.com/licenses/mit/)
