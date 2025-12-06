@@ -63,7 +63,6 @@ export class IndexedDBStorageService implements StorageService {
         await this.initDb();
       }
       const transaction = this.db.transaction(storeName, mode);
-      transaction.oncomplete = () => resolve(transaction.objectStore(storeName));
       transaction.onerror = (event) => reject(`Transaction error: ${transaction.error || (event.target as IDBRequest).error}`);
       transaction.onabort = (event) => reject(`Transaction aborted: ${transaction.error || (event.target as IDBRequest).error}`);
       resolve(transaction.objectStore(storeName));

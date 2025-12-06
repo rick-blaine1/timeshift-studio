@@ -8,6 +8,7 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
+    include: ['**/*.test.{ts,tsx}'],
     coverage: {
       reporter: ['text', 'json', 'html'],
       exclude: [
@@ -16,6 +17,9 @@ export default defineConfig({
         '**/*.d.ts',
         '**/*.config.*'
       ]
+    },
+    benchmark: {
+      include: ['**/*.bench.test.{ts,tsx}']
     }
   },
   resolve: {

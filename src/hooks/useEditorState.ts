@@ -375,15 +375,18 @@ export function useEditorState() {
     });
   }, []);
 
-  const setSpeedMultiplier = useCallback((speed: number) => {
-    setState(prev => ({
-      ...prev,
-      exportSettings: {
-        ...prev.exportSettings,
-        speedMultiplier: Math.max(0.1, Math.min(100, speed)), // Allow smaller multipliers
-      },
-      updatedAt: Date.now(),
-    }));
+  const setClipSpeed = useCallback((fileId: string, speed: number) => {
+    setState(prev => {
+      const updatedFiles = prev.files.map(file =>
+        file.id === fileId ? { ...file, speedMultiplier: speed } : file
+      );
+      
+      return {
+        ...prev,
+        files: updatedFiles,
+        updatedAt: Date.now(),
+      };
+    });
   }, []);
 
   const setPreviewQuality = useCallback((quality: 'proxy' | 'high') => {
@@ -542,7 +545,7 @@ export function useEditorState() {
       addToTimeline,
       removeFromTimeline,
       reorderTimeline,
-      setSpeedMultiplier,
+      setClipSpeed,
       setPreviewQuality,
       setCurrentTime,
       togglePlayback,

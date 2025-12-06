@@ -9,9 +9,10 @@ interface FileSidebarProps {
   onUpdateFiles?: (files: VideoFile[]) => void;
   onRemoveFile: (fileId: string) => void;
   onAddToTimeline: (fileId: string) => void;
+  onSpeedChange?: (fileId: string, speed: number) => void;
 }
 
-export function FileSidebar({ files, onAddFiles, onUpdateFiles, onRemoveFile, onAddToTimeline }: FileSidebarProps) {
+export function FileSidebar({ files, onAddFiles, onUpdateFiles, onRemoveFile, onAddToTimeline, onSpeedChange }: FileSidebarProps) {
   return (
     <div className="flex flex-col h-full bg-card border-r">
       <div className="p-4 border-b">
@@ -37,6 +38,7 @@ export function FileSidebar({ files, onAddFiles, onUpdateFiles, onRemoveFile, on
               file={file}
               onRemove={() => onRemoveFile(file.id)}
               onAddToTimeline={() => onAddToTimeline(file.id)}
+              onSpeedChange={onSpeedChange}
             />
           ))
         )}

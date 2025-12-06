@@ -8,6 +8,7 @@ import { useEditorState } from '@/hooks/useEditorState';
 import { toast } from '@/hooks/use-toast';
 
 export function EditorWorkspace() {
+  console.log('[DEBUG] Rendering EditorWorkspace');
   const { state, actions, computed } = useEditorState();
   const [isExportOpen, setIsExportOpen] = useState(false);
 

@@ -10,8 +10,12 @@ services:
       - "8080:8080"
       - "9229:9229" # For debugging
     volumes:
-      - .:/app
-      - /app/node_modules
+      - type: bind
+        source: .
+        target: /app
+      - type: bind
+        source: ./node_modules
+        target: /app/node_modules
     environment:
       NODE_ENV: development
     command: npm run dev

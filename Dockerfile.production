@@ -1,6 +1,6 @@
 # Dockerfile.production
-# Stage 1: Build environment
-FROM node:18-alpine AS builder
+# Use shared base image
+FROM base AS builder
 
 WORKDIR /app
 
@@ -8,8 +8,9 @@ WORKDIR /app
 COPY package*.json ./
 COPY bun.lockb ./
 
-# Install dependencies (including dev dependencies for build)
-RUN npm ci && npm cache clean --force
+# Install dependencies with cache directory
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci
 
 # Copy source code
 COPY . .
@@ -20,20 +21,12 @@ RUN npm run build
 # Stage 2: Test environment
 FROM builder AS tester
 
-# Install dev dependencies for testing
-RUN npm ci
-
 # Run tests
 RUN npm run test:ci
 RUN npm run test:e2e:ci
 
 # Stage 3: Production environment
 FROM nginx:alpine AS production
-
-# Install FFmpeg for video processing support
-RUN apk add --no-cache \
-    ffmpeg \
-    && rm -rf /var/cache/apk/*
 
 # Copy built application
 COPY --from=builder /app/dist /usr/share/nginx/html

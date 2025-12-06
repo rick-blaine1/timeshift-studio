@@ -1,19 +1,14 @@
-FROM node:18-alpine
+FROM . as base
 
 WORKDIR /app
-
-# Install development tools
-RUN apk add --no-cache \
-    git \
-    curl \
-    && rm -rf /var/cache/apk/*
 
 # Copy package files
 COPY package*.json ./
 COPY bun.lockb ./
 
-# Install all dependencies (including dev)
-RUN npm install
+# Install dependencies with cache directory
+RUN --mount=type=cache,target=/root/.npm \
+    npm install
 
 # Copy source code
 COPY . .

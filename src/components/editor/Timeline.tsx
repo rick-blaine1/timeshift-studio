@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { TimelineClip as TimelineClipType, VideoFile } from '@/types/editor';
 import { formatDuration } from '@/data/sampleData';
 import { X, GripHorizontal } from 'lucide-react';
@@ -29,6 +29,7 @@ export function Timeline({
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [dropTargetIndex, setDropTargetIndex] = useState<number | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [activeTrimHandle, setActiveTrimHandle] = useState<{ clipId: string, side: 'start' | 'end' } | null>(null);
 
   const playheadPosition = totalDuration > 0 ? (currentTime / totalDuration) * 100 : 0;
 
@@ -82,6 +83,62 @@ export function Timeline({
     onTimeChange(percentage * totalDuration);
   };
 
+  const handleTrimStart = (e: React.MouseEvent, clipId: string) => {
+    e.stopPropagation();
+    setActiveTrimHandle({ clipId, side: 'start' });
+  };
+
+  const handleTrimEnd = (e: React.MouseEvent, clipId: string) => {
+    e.stopPropagation();
+    setActiveTrimHandle({ clipId, side: 'end' });
+  };
+
+  useEffect(() => {
+    if (!activeTrimHandle) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const timelineElement = document.querySelector('.timeline-container');
+      if (!timelineElement) return;
+
+      const rect = timelineElement.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left;
+      const timelineWidth = rect.width;
+      const timePosition = (mouseX / timelineWidth) * totalDuration;
+
+      // Find the clip being trimmed
+      const clipIndex = clips.findIndex(c => c.id === activeTrimHandle.clipId);
+      if (clipIndex === -1) return;
+
+      const clip = clips[clipIndex];
+      const file = files.find(f => f.id === clip.fileId);
+      if (!file) return;
+
+      if (activeTrimHandle.side === 'start') {
+        // Ensure trim start is within valid range
+        const newStart = Math.max(0, Math.min(timePosition, clip.end - 0.1));
+        // Update clip start time and duration
+      } else {
+        // Ensure trim end is within valid range
+        const newEnd = Math.min(file.duration, Math.max(timePosition, clip.start + 0.1));
+        // Update clip end time and duration
+      }
+
+      // Update timeline total duration
+    };
+
+    const handleMouseUp = () => {
+      setActiveTrimHandle(null);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [activeTrimHandle, clips, files, totalDuration]);
+
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between px-1">
@@ -132,6 +189,13 @@ export function Timeline({
                     style={{ width: `${Math.max(widthPercent, 8)}%`, minWidth: '60px' }}
                     onClick={(e) => e.stopPropagation()}
                   >
+                    {/* Left trim handle */}
+                    <div
+                      className="absolute left-0 top-0 bottom-0 w-2 bg-trim-handle cursor-ew-resize z-20 opacity-0 group-hover:opacity-100 transition-opacity"
+                      onMouseDown={(e) => handleTrimStart(e, clip.id)}
+                    />
+                    
+                    {/* Clip content */}
                     <div className="flex items-center h-14 px-2 gap-2">
                       <GripHorizontal className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
                       
@@ -160,6 +224,12 @@ export function Timeline({
                         <X className="w-3 h-3" />
                       </Button>
                     </div>
+                    
+                    {/* Right trim handle */}
+                    <div
+                      className="absolute right-0 top-0 bottom-0 w-2 bg-trim-handle cursor-ew-resize z-20 opacity-0 group-hover:opacity-100 transition-opacity"
+                      onMouseDown={(e) => handleTrimEnd(e, clip.id)}
+                    />
                   </div>
                 );
               })}

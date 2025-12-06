@@ -20,6 +20,7 @@ export interface VideoFileSchema {
   thumbnail: string;             // Base64 encoded thumbnail
   thumbnailTimestamp: number;    // Thumbnail extraction time
   status: VideoFileStatus;       // Processing status
+  speedMultiplier?: number;      // Playback speed multiplier
   
   // Storage references
   indexedDBKey?: string;         // IndexedDB storage key

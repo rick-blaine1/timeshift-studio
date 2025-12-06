@@ -10,3 +10,5 @@ export type ProjectState = z.infer<typeof ProjectSchemaValidator>;
 export type ExportSettings = z.infer<typeof ExportSettingsSchemaValidator>;
 
 export type ExportStatus = 'idle' | 'preparing' | 'encoding' | 'packaging' | 'done' | 'error';
+
+export type PreviewQuality = 'proxy' | 'high';

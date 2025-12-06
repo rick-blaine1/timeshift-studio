@@ -2,30 +2,28 @@
 
 This file provides guidance to agents when working with code in this repository.
 
-## Project Overview
-- **Stack:** React (TS), Vite, Shadcn/UI, Tailwind CSS, npm (for dependencies), Vitest (unit/integration), Playwright (E2E).
-- **Architecture:** Purely client-side application, all video processing (FFmpeg.wasm, WebCodecs) runs in the browser via Web Workers.
-- **Deployment:** Single Docker container for local development and deployment; no external backend services for core functionality.
-- **Key Documentation:** Refer to [`docs/SOFTWARE_ARCHITECTURE_PLAN.md`](docs/SOFTWARE_ARCHITECTURE_PLAN.md:1) and [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md:1) for detailed design and roadmap.
+## Non-Obvious Commands
+- `npm docker:dev`: Starts development environment using Docker Compose
+- `npm docker:test`: Runs tests in a dedicated Docker container
+- `npm docker:prod`: Builds and runs production Docker image
 
-## Commands
-- **Testing:**
-  - `npm test`: Runs Vitest for unit/integration tests.
-  - `npm test:ui`: Runs Vitest with a UI.
-  - `npm test:ci`: Runs Vitest with coverage for CI environments.
-  - `npm test:e2e`: Runs Playwright for end-to-end tests.
-  - `npm test:e2e:ui`: Runs Playwright with a UI.
-  - `npm test:e2e:ci`: Runs Playwright for E2E tests with HTML reporter for CI environments.
-- **Build & Lint:**
-  - `npm run build:dev`: Performs a development build using Vite.
-  - `npm run type-check`: Performs TypeScript type checking without emitting files (`tsc --noEmit`).
-- **Docker:**
-  - `npm docker:dev`: Starts the development environment using `compose.development.yaml` with `--build`.
-  - `npm docker:test`: Runs tests in a dedicated Docker container using `compose.test.yaml` and exits (`--abort-on-container-exit`).
-  - `npm docker:prod`: Builds and runs the production Docker image using `compose.yaml`.
+## Project-Specific Patterns
+- **Video Processing**: Client-side only using FFmpeg.wasm/WebCodecs in Web Workers
+- **State Management**: Custom React hooks (`useEditorState`) instead of Redux
+- **Storage**: IndexedDB/File System API for persistent storage (no server DB)
+- **Styling**: Extensive custom Tailwind CSS palette (`timeline-bg`, `timeline-clip`)
 
-## Code Style & Conventions
-- **TypeScript Strictness:** Relaxed type-checking, with `noImplicitAny`, `strictNullChecks`, `noUnusedLocals`, `noUnusedParameters` explicitly set to `false` in `tsconfig.json`/`tsconfig.app.json`.
-- **Imports:** Absolute imports are configured using `@/*` for the `src/` directory.
-- **Styling:** Extensive custom Tailwind CSS color palette, `borderRadius`, `boxShadow`, and custom animation keyframes are defined in [`tailwind.config.ts`](tailwind.config.ts:1). Follow existing patterns.
-- **Unused Variables:** ESLint rule `@typescript-eslint/no-unused-vars` is turned off, allowing unused variables in TypeScript files.
+## Architectural Constraints
+- **Single-User Focus**: No backend API or multi-user support
+- **Memory Limits**: Projects capped at 4GB total size
+- **Docker Deployment**: All environments use Docker containers
+- **Browser Support**: Modern browsers only (Chrome, Firefox, Edge)
+
+## Gotchas
+- FFmpeg.wasm requires explicit initialization before use (call `initFFmpeg()`)
+- File System API permissions vary by browser
+- Memory-intensive operations require chunked processing (use sequential queues for batch operations)
+- Trim handles require custom drag logic
+- Relaxed TypeScript rules (`no-unused-vars` disabled)
+- **Speed Changes**: Speed adjustments require re-encoding the video
+- **Quality Presets**: Quality presets affect export performance and file size

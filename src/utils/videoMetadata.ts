@@ -13,13 +13,24 @@ export function extractVideoMetadata(file: File): Promise<Partial<VideoFileSchem
     video.playsInline = true; // Prevent fullscreen on iOS
     video.autoplay = false; // Do not autoplay
 
+    const timeoutId = setTimeout(() => {
+      window.URL.revokeObjectURL(video.src);
+      reject(new Error('Video metadata extraction timed out'));
+    }, 10000); // 10 seconds timeout
+
     video.onloadedmetadata = () => {
+      clearTimeout(timeoutId);
       window.URL.revokeObjectURL(video.src);
 
+      // Validate metadata values - ensure they're positive numbers
+      const duration = video.duration > 0 ? video.duration : 0;
+      const width = video.videoWidth > 0 ? video.videoWidth : 0;
+      const height = video.videoHeight > 0 ? video.videoHeight : 0;
+
       const metadata: Partial<VideoFileSchema> = {
-        duration: video.duration,
-        width: video.videoWidth,
-        height: video.videoHeight,
+        duration,
+        width,
+        height,
         // Framerate, bitrate, and codec are not directly available via HTMLMediaElement properties.
         // For these, more advanced libraries like FFmpeg.wasm or MediaInfo.js would be needed.
         // For now, only provide what's directly available.
@@ -28,6 +39,7 @@ export function extractVideoMetadata(file: File): Promise<Partial<VideoFileSchem
     };
 
     video.onerror = (e: Event) => { // Cast 'e' to Event type
+      clearTimeout(timeoutId);
       window.URL.revokeObjectURL(video.src);
       // Safely access target and error message
       reject(new Error(`Failed to load video metadata: ${(e.target as HTMLVideoElement)?.error?.message || 'Unknown error'}`));

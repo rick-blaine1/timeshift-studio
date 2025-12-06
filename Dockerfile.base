@@ -1,0 +1,9 @@
+# Base image with FFmpeg pre-installed
+FROM node:18-alpine
+
+# Install FFmpeg and development tools
+RUN apk add --no-cache \
+    ffmpeg \
+    git \
+    curl \
+    && rm -rf /var/cache/apk/*

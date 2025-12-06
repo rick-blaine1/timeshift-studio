@@ -16,8 +16,8 @@ export interface TimelineClipSchema {
   order: number;                 // Clip order index
   
   // Clip modifications
-  trimStart?: number;            // Trim from start (seconds)
-  trimEnd?: number;              // Trim from end (seconds)
+  trimStart: number;            // Trim from start (seconds)
+  trimEnd: number;              // Trim from end (seconds)
   speedMultiplier?: number;      // Individual clip speed override
   
   // Metadata

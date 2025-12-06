@@ -305,6 +305,21 @@ export class PerformanceMonitor {
   }
 
   /**
+   * Reset performance metrics
+   */
+  reset(): void {
+    this.metrics.videoProcessing = null;
+  }
+
+  /**
+   * Log performance results
+   */
+  logResults(): void {
+    const metrics = this.getMetrics();
+    console.log('Performance Results:', metrics);
+  }
+
+  /**
    * Clean up observers
    */
   dispose(): void {

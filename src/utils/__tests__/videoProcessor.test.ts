@@ -106,6 +106,9 @@ describe('concatenateVideos', () => {
       fileId: 'file-1',
       startTime: 0,
       duration: 60,
+      trimStart: 0,
+      trimEnd: 60,
+      speedMultiplier: 1,
       order: 0,
       createdAt: Date.now(),
       updatedAt: Date.now(),
@@ -115,6 +118,9 @@ describe('concatenateVideos', () => {
       fileId: 'file-2',
       startTime: 60,
       duration: 90,
+      trimStart: 0,
+      trimEnd: 90,
+      speedMultiplier: 1,
       order: 1,
       createdAt: Date.now(),
       updatedAt: Date.now(),
@@ -281,5 +287,96 @@ describe('concatenateVideos', () => {
 
     // Verify URL cleanup
     expect(global.URL.revokeObjectURL).toHaveBeenCalled();
+  });
+});
+
+describe('FFmpeg Integration', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mock('../ffmpeg', () => ({
+      initFFmpeg: vi.fn().mockResolvedValue(undefined),
+      trimVideo: vi.fn().mockResolvedValue(new Blob(['trimmed'], { type: 'video/mp4' })),
+      concatVideos: vi.fn().mockResolvedValue(new Blob(['concatenated'], { type: 'video/mp4' })),
+      transcodeVideo: vi.fn().mockResolvedValue(new Blob(['transcoded'], { type: 'video/webm' })),
+    }));
+  });
+
+  it('initializes FFmpeg before processing', async () => {
+    const { initFFmpeg } = await import('../ffmpeg');
+    const processor = new VideoProcessor();
+    
+    await processor.processTimeline(
+      mockClips,
+      mockFiles,
+      { speedMultiplier: 1, quality: 'medium', format: 'mp4' }
+    );
+    
+    expect(initFFmpeg).toHaveBeenCalled();
+  });
+
+  it('trims single clip correctly', async () => {
+    const { trimVideo } = await import('../ffmpeg');
+    const processor = new VideoProcessor();
+    
+    await processor.processTimeline(
+      [mockClips[0]],
+      mockFiles,
+      { speedMultiplier: 1, quality: 'medium', format: 'mp4' }
+    );
+    
+    expect(trimVideo).toHaveBeenCalledWith(
+      mockFiles[0].blob,
+      mockClips[0].trimStart,
+      mockClips[0].trimEnd,
+      mockClips[0].speedMultiplier || 1,
+      'output.mp4'
+    );
+  });
+
+  it('concatenates multiple clips correctly', async () => {
+    const { concatVideos } = await import('../ffmpeg');
+    const processor = new VideoProcessor();
+    
+    await processor.processTimeline(
+      mockClips,
+      mockFiles,
+      { speedMultiplier: 1, quality: 'medium', format: 'mp4' }
+    );
+    
+    expect(concatVideos).toHaveBeenCalledWith(
+      [mockFiles[0].blob, mockFiles[1].blob],
+      mockClips
+    );
+  });
+
+  it('transcodes video when format changes', async () => {
+    const { transcodeVideo } = await import('../ffmpeg');
+    const processor = new VideoProcessor();
+    
+    await processor.processTimeline(
+      [mockClips[0]],
+      mockFiles,
+      { speedMultiplier: 1, quality: 'medium', format: 'webm' }
+    );
+    
+    expect(transcodeVideo).toHaveBeenCalledWith(
+      expect.any(Blob),
+      { format: 'webm', quality: 'medium' }
+    );
+  });
+
+  it('handles FFmpeg processing errors', async () => {
+    const { trimVideo } = await import('../ffmpeg');
+    trimVideo.mockRejectedValueOnce(new Error('FFmpeg error'));
+    
+    const processor = new VideoProcessor();
+    
+    await expect(
+      processor.processTimeline(
+        [mockClips[0]],
+        mockFiles,
+        { speedMultiplier: 1, quality: 'medium', format: 'mp4' }
+      )
+    ).rejects.toThrow('FFmpeg processing failed');
   });
 });

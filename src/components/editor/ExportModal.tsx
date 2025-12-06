@@ -218,6 +218,7 @@ export function ExportModal({
   }, [processingSessionId]);
 
   const isExporting = ['preparing', 'encoding', 'packaging'].includes(status);
+  const isBatchMode = exportSettings.batchMode;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -261,6 +262,14 @@ export function ExportModal({
                   <span className="text-muted-foreground">Audio</span>
                   <span className="font-medium text-muted-foreground">Removed (timelapse)</span>
                 </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Quality</span>
+                  <span className="font-medium">{exportSettings.quality.charAt(0).toUpperCase() + exportSettings.quality.slice(1)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Batch Mode</span>
+                  <span className="font-medium">{exportSettings.batchMode ? 'Enabled' : 'Disabled'}</span>
+                </div>
               </div>
 
               <div className="flex gap-3">
@@ -268,7 +277,7 @@ export function ExportModal({
                   Cancel
                 </Button>
                 <Button onClick={handleStartExport} className="flex-1">
-                  Start Export
+                  {exportSettings.batchMode ? 'Start Batch Export' : 'Start Export'}
                 </Button>
               </div>
             </>
@@ -289,20 +298,29 @@ export function ExportModal({
 
           {status === 'done' && (
             <div className="space-y-4">
-              <div className="bg-success/10 border border-success/20 rounded-lg p-4 text-center">
-                <CheckCircle2 className="w-10 h-10 text-success mx-auto mb-2" />
-                <p className="text-sm font-medium">Your timelapse is ready!</p>
-              </div>
-
-              <div className="flex gap-3">
-                <Button variant="outline" onClick={onClose} className="flex-1">
-                  Close
-                </Button>
-                <Button onClick={handleDownload} className="flex-1">
-                  <Download className="w-4 h-4 mr-2" />
-                  Download
-                </Button>
-              </div>
+              {exportedBlob ? (
+                <>
+                  <div className="bg-success/10 border border-success/20 rounded-lg p-4 text-center">
+                    <CheckCircle2 className="w-10 h-10 text-success mx-auto mb-2" />
+                    <p className="text-sm font-medium">Your timelapse is ready!</p>
+                  </div>
+                  <div className="flex gap-3">
+                    <Button variant="outline" onClick={onClose} className="flex-1">
+                      Close
+                    </Button>
+                    <Button onClick={handleDownload} className="flex-1">
+                      <Download className="w-4 h-4 mr-2" />
+                      Download
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
+                  <p className="text-sm text-destructive font-medium">
+                    Export completed but no video was generated
+                  </p>
+                </div>
+              )}
             </div>
           )}
 

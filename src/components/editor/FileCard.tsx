@@ -1,17 +1,18 @@
-import { VideoFile } from '@/types/editor';
+import { VideoFileSchema } from '@/types/schema/VideoFile';
 import { formatDuration, formatFileSize } from '@/data/sampleData';
 import { X, GripVertical, Check, AlertCircle, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 interface FileCardProps {
-  file: VideoFile;
+  file: VideoFileSchema;
   onRemove: () => void;
   onAddToTimeline: () => void;
+  onSpeedChange?: (fileId: string, speed: number) => void;
   isDragging?: boolean;
 }
 
-export function FileCard({ file, onRemove, onAddToTimeline, isDragging }: FileCardProps) {
+export function FileCard({ file, onRemove, onAddToTimeline, onSpeedChange, isDragging }: FileCardProps) {
   const statusConfig = {
     ready: { icon: null, label: 'Ready', className: 'bg-muted text-muted-foreground' },
     'on-timeline': { icon: Check, label: 'On timeline', className: 'bg-success/10 text-success' },
@@ -72,7 +73,21 @@ export function FileCard({ file, onRemove, onAddToTimeline, isDragging }: FileCa
             <span>•</span>
             <span>{formatFileSize(file.size)}</span>
           </div>
-          <div className={cn('inline-flex items-center gap-1 mt-1.5 px-1.5 py-0.5 rounded text-[10px] font-medium', status.className)}>
+          <div className="flex items-center gap-1 mt-1">
+            <span className="text-xs text-muted-foreground">Speed:</span>
+            <select
+              className="text-xs bg-muted rounded px-1 py-0.5"
+              value={file.speedMultiplier || 1}
+              onChange={(e) => onSpeedChange && onSpeedChange(file.id, parseFloat(e.target.value))}
+            >
+              <option value="0.25">0.25x</option>
+              <option value="0.5">0.5x</option>
+              <option value="1">1x</option>
+              <option value="1.5">1.5x</option>
+              <option value="2">2x</option>
+            </select>
+          </div>
+          <div className={cn('inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded text-[10px] font-medium', status.className)}>
             {StatusIcon && <StatusIcon className="w-3 h-3" />}
             {status.label}
           </div>
