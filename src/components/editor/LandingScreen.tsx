@@ -5,10 +5,11 @@ import { Button } from '@/components/ui/button';
 
 interface LandingScreenProps {
   onFilesAdded: (files: VideoFile[]) => void;
+  onFilesUpdated?: (files: VideoFile[]) => void;
   onLoadSample: () => void;
 }
 
-export function LandingScreen({ onFilesAdded, onLoadSample }: LandingScreenProps) {
+export function LandingScreen({ onFilesAdded, onFilesUpdated, onLoadSample }: LandingScreenProps) {
   return (
     <div className="min-h-screen flex flex-col">
       {/* Header */}
@@ -33,7 +34,7 @@ export function LandingScreen({ onFilesAdded, onLoadSample }: LandingScreenProps
             </p>
           </div>
 
-          <UploadArea onFilesAdded={onFilesAdded} />
+          <UploadArea onFilesAdded={onFilesAdded} onFilesUpdated={onFilesUpdated} />
 
           <div className="mt-6 text-center">
             <Button variant="link" onClick={onLoadSample} className="text-muted-foreground">

@@ -4,12 +4,18 @@ import { VideoPreview } from './VideoPreview';
 import { Timeline } from './Timeline';
 import { ControlsPanel } from './ControlsPanel';
 import { ExportModal } from './ExportModal';
-import { useEditorState } from '@/hooks/useEditorState';
 import { toast } from '@/hooks/use-toast';
+import { ProjectState } from '@/types/editor';
+import { useEditorState } from '@/hooks/useEditorState';
 
-export function EditorWorkspace() {
+export interface EditorWorkspaceProps {
+  state: ProjectState;
+  actions: ReturnType<typeof useEditorState>['actions'];
+  computed: ReturnType<typeof useEditorState>['computed'];
+}
+
+export function EditorWorkspace({ state, actions, computed }: EditorWorkspaceProps) {
   console.log('[DEBUG] Rendering EditorWorkspace');
-  const { state, actions, computed } = useEditorState();
   const [isExportOpen, setIsExportOpen] = useState(false);
 
   const handleClearProject = () => {
