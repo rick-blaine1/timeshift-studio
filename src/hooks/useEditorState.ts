@@ -433,6 +433,10 @@ export function useEditorState() {
     }));
   }, []);
 
+  const setSpeedMultiplier = useCallback((speed: number) => {
+    setExportSettings({ speedMultiplier: speed });
+  }, [setExportSettings]);
+
   const clearProject = useCallback(async () => {
     try {
       // Clear from IndexedDB
@@ -550,6 +554,7 @@ export function useEditorState() {
       setCurrentTime,
       togglePlayback,
       setExportSettings,
+      setSpeedMultiplier,
       clearProject,
       loadSampleData,
       saveProjectAs,

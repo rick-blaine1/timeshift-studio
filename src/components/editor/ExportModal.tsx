@@ -58,9 +58,16 @@ export function ExportModal({
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [errorSuggestions, setErrorSuggestions] = useState<string[]>([]);
   const [processingSessionId, setProcessingSessionId] = useState<string | null>(null);
+  const [abortController, setAbortController] = useState<AbortController | null>(null);
 
   useEffect(() => {
     if (!isOpen) {
+      // Cancel any ongoing export
+      if (abortController) {
+        abortController.abort();
+        setAbortController(null);
+      }
+      
       setStatus('idle');
       setProgress(0);
       setExportedBlob(null);
@@ -73,7 +80,7 @@ export function ExportModal({
         setProcessingSessionId(null);
       }
     }
-  }, [isOpen, processingSessionId]);
+  }, [isOpen, processingSessionId, abortController]);
 
   const handleStartExport = useCallback(async () => {
     if (clips.length === 0) {
@@ -82,6 +89,10 @@ export function ExportModal({
       setErrorSuggestions(['Add video clips to the timeline before exporting']);
       return;
     }
+
+    // Create abort controller for cancellation
+    const controller = new AbortController();
+    setAbortController(controller);
 
     try {
       setStatus('preparing');
@@ -98,6 +109,11 @@ export function ExportModal({
       const healthCheck = performanceMonitor.checkPerformanceHealth();
       if (healthCheck.status === 'critical') {
         console.warn('Performance issues detected before export:', healthCheck);
+      }
+
+      // Check if cancelled
+      if (controller.signal.aborted) {
+        throw new Error('Export cancelled by user');
       }
 
       // Convert timeline clips to schema format
@@ -142,6 +158,7 @@ export function ExportModal({
         format: exportSettings.format,
         maxMemoryUsage: 800, // 800MB memory limit
         onProgress: (progressValue) => {
+          console.log('[ExportModal] Progress update received:', progressValue);
           setProgress(progressValue);
           if (progressValue < 25) {
             setStatus('preparing');
@@ -153,12 +170,23 @@ export function ExportModal({
         },
       };
 
+      console.log('[ExportModal] Starting export with options:', processingOptions);
+
       setStatus('encoding');
+      console.log('[ExportModal] Calling concatenateVideos with', timelineClips.length, 'clips');
       const result = await concatenateVideos(timelineClips, videoFiles, processingOptions);
+      
+      console.log('[ExportModal] Export complete, result size:', result.size);
+      
+      // Check if cancelled after processing
+      if (controller.signal.aborted) {
+        throw new Error('Export cancelled by user');
+      }
       
       // End performance monitoring
       performanceMonitor.endVideoProcessing(sessionId);
       setProcessingSessionId(null);
+      setAbortController(null);
       
       setExportedBlob(result.blob);
       setStatus('done');
@@ -171,6 +199,15 @@ export function ExportModal({
       if (processingSessionId) {
         performanceMonitor.endVideoProcessing(processingSessionId);
         setProcessingSessionId(null);
+      }
+      
+      setAbortController(null);
+      
+      // Check if it was a cancellation
+      if ((error as Error).message === 'Export cancelled by user') {
+        setStatus('idle');
+        setProgress(0);
+        return;
       }
       
       setStatus('error');
@@ -193,6 +230,20 @@ export function ExportModal({
       }
     }
   }, [clips, files, exportSettings, processingSessionId]);
+
+  const handleCancelExport = useCallback(() => {
+    if (abortController) {
+      abortController.abort();
+      setAbortController(null);
+      setStatus('idle');
+      setProgress(0);
+      
+      if (processingSessionId) {
+        performanceMonitor.endVideoProcessing(processingSessionId);
+        setProcessingSessionId(null);
+      }
+    }
+  }, [abortController, processingSessionId]);
 
   const handleDownload = useCallback(() => {
     if (!exportedBlob) {
@@ -293,6 +344,13 @@ export function ExportModal({
               <p className="text-xs text-muted-foreground text-center">
                 {progress}% complete
               </p>
+              <Button
+                variant="outline"
+                onClick={handleCancelExport}
+                className="w-full mt-2"
+              >
+                Cancel Export
+              </Button>
             </div>
           )}
 

@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FFmpeg.wasm Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 10px 5px;
+        }
+        #status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 5px;
+            background: #f0f0f0;
+        }
+        .success { background: #d4edda !important; color: #155724; }
+        .error { background: #f8d7da !important; color: #721c24; }
+        .info { background: #d1ecf1 !important; color: #0c5460; }
+        #console {
+            margin-top: 20px;
+            padding: 15px;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            border-radius: 5px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
+        .log-entry {
+            margin: 2px 0;
+            padding: 2px 0;
+        }
+        .log-info { color: #4ec9b0; }
+        .log-warn { color: #dcdcaa; }
+        .log-error { color: #f48771; }
+    </style>
+</head>
+<body>
+    <h1>FFmpeg.wasm Initialization Test</h1>
+    <p>This page tests FFmpeg.wasm initialization with detailed logging.</p>
+    
+    <div>
+        <button id="testBtn" onclick="testFFmpeg()">Test FFmpeg Initialization</button>
+        <button onclick="clearConsole()">Clear Console</button>
+        <button onclick="checkEnvironment()">Check Environment</button>
+    </div>
+    
+    <div id="status">
+        Click "Test FFmpeg Initialization" to begin
+    </div>
+    
+    <div id="console"></div>
+
+    <script type="module">
+        import { FFmpeg } from 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/dist/esm/index.js';
+        
+        const consoleDiv = document.getElementById('console');
+        const statusDiv = document.getElementById('status');
+        
+        // Intercept console methods
+        const originalLog = console.log;
+        const originalWarn = console.warn;
+        const originalError = console.error;
+        
+        function addToConsole(message, type = 'info') {
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            entry.textContent = `[${new Date().toISOString().split('T')[1].split('.')[0]}] ${message}`;
+            consoleDiv.appendChild(entry);
+            consoleDiv.scrollTop = consoleDiv.scrollHeight;
+        }
+        
+        console.log = function(...args) {
+            originalLog.apply(console, args);
+            addToConsole(args.join(' '), 'info');
+        };
+        
+        console.warn = function(...args) {
+            originalWarn.apply(console, args);
+            addToConsole(args.join(' '), 'warn');
+        };
+        
+        console.error = function(...args) {
+            originalError.apply(console, args);
+            addToConsole(args.join(' '), 'error');
+        };
+        
+        window.clearConsole = function() {
+            consoleDiv.innerHTML = '';
+        };
+        
+        window.checkEnvironment = function() {
+            statusDiv.className = 'info';
+            statusDiv.innerHTML = 'Checking environment...';
+            
+            console.log('=== Environment Check ===');
+            console.log('SharedArrayBuffer available:', typeof SharedArrayBuffer !== 'undefined');
+            console.log('crossOriginIsolated:', self.crossOriginIsolated);
+            console.log('User Agent:', navigator.userAgent);
+            console.log('Platform:', navigator.platform);
+            console.log('Memory (if available):', performance.memory ? 
+                `${(performance.memory.usedJSHeapSize / 1024 / 1024).toFixed(2)} MB used` : 
+                'Not available');
+            
+            // Check headers via fetch
+            fetch(window.location.href)
+                .then(response => {
+                    console.log('Response headers:');
+                    for (let [key, value] of response.headers.entries()) {
+                        if (key.toLowerCase().includes('origin')) {
+                            console.log(`  ${key}: ${value}`);
+                        }
+                    }
+                })
+                .catch(err => console.error('Failed to check headers:', err));
+            
+            statusDiv.className = '';
+            statusDiv.innerHTML = 'Environment check complete - see console';
+        };
+        
+        window.testFFmpeg = async function() {
+            const btn = document.getElementById('testBtn');
+            btn.disabled = true;
+            statusDiv.className = 'info';
+            statusDiv.innerHTML = 'Initializing FFmpeg.wasm...';
+            
+            try {
+                console.log('=== FFmpeg.wasm Test Started ===');
+                console.log('Creating FFmpeg instance...');
+                
+                const ffmpeg = new FFmpeg();
+                console.log('✓ FFmpeg instance created');
+                
+                // Set up event listeners
+                ffmpeg.on('log', ({ message }) => {
+                    console.log('[FFmpeg Internal]', message);
+                });
+                
+                ffmpeg.on('progress', ({ progress, time }) => {
+                    console.log('[FFmpeg Progress]', { progress, time });
+                });
+                
+                console.log('Starting load...');
+                const startTime = Date.now();
+                
+                await ffmpeg.load();
+                
+                const elapsed = Date.now() - startTime;
+                console.log(`✓ FFmpeg loaded successfully in ${elapsed}ms`);
+                
+                statusDiv.className = 'success';
+                statusDiv.innerHTML = `✓ FFmpeg.wasm loaded successfully in ${(elapsed/1000).toFixed(2)}s`;
+                
+            } catch (error) {
+                console.error('❌ FFmpeg initialization failed:', error);
+                console.error('Error type:', error.constructor.name);
+                console.error('Error message:', error.message);
+                console.error('Error stack:', error.stack);
+                
+                statusDiv.className = 'error';
+                statusDiv.innerHTML = `❌ Failed: ${error.message}`;
+            } finally {
+                btn.disabled = false;
+            }
+        };
+        
+        // Auto-check environment on load
+        console.log('Page loaded, checking environment...');
+        checkEnvironment();
+    </script>
+</body>
+</html>

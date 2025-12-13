@@ -1,6 +1,6 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
-import { EditorWorkspace } from '@/components/editor/EditorWorkspace';
+import Index from '@/pages/Index';
 import { VideoFileStatus } from '@/types/schema/VideoFile';
 
 // Mock all the dependencies
@@ -69,11 +69,10 @@ describe('File Upload to Export Integration', () => {
   });
 
   it('completes full workflow from upload to export', async () => {
-    render(<EditorWorkspace />);
+    render(<Index />);
 
-    // 1. Upload a file
-    const fileInput = screen.getAllByRole('button', { name: /choose files|add clips/i })[0]
-      .querySelector('input[type="file"]');
+    // 1. Upload a file (from landing screen)
+    const fileInput = screen.getByRole('button', { name: /choose files/i }).querySelector('input[type="file"]');
     
     expect(fileInput).toBeInTheDocument();
 
@@ -92,7 +91,7 @@ describe('File Upload to Export Integration', () => {
       fireEvent.change(fileInput);
     }
 
-    // 2. Wait for file to be processed
+    // 2. Wait for file to be processed and transition to editor workspace
     await waitFor(() => {
       expect(screen.getByText('test-video.mp4')).toBeInTheDocument();
     }, { timeout: 5000 });
@@ -161,11 +160,10 @@ describe('File Upload to Export Integration', () => {
   });
 
   it('handles multiple files workflow', async () => {
-    render(<EditorWorkspace />);
+    render(<Index />);
 
     // Upload multiple files
-    const fileInput = screen.getAllByRole('button', { name: /choose files|add clips/i })[0]
-      .querySelector('input[type="file"]');
+    const fileInput = screen.getByRole('button', { name: /choose files/i }).querySelector('input[type="file"]');
 
     const mockFile1 = new File(['video 1'], 'video1.mp4', { type: 'video/mp4' });
     const mockFile2 = new File(['video 2'], 'video2.mp4', { type: 'video/mp4' });
@@ -181,7 +179,7 @@ describe('File Upload to Export Integration', () => {
       fireEvent.change(fileInput);
     }
 
-    // Wait for both files to be processed
+    // Wait for both files to be processed and transition to editor workspace
     await waitFor(() => {
       expect(screen.getByText('video1.mp4')).toBeInTheDocument();
       expect(screen.getByText('video2.mp4')).toBeInTheDocument();
@@ -227,11 +225,10 @@ describe('File Upload to Export Integration', () => {
     const { concatenateVideos } = await import('@/utils/videoProcessor');
     vi.mocked(concatenateVideos).mockRejectedValueOnce(new Error('Processing failed'));
 
-    render(<EditorWorkspace />);
+    render(<Index />);
 
     // Upload and add file to timeline
-    const fileInput = screen.getAllByRole('button', { name: /choose files|add clips/i })[0]
-      .querySelector('input[type="file"]');
+    const fileInput = screen.getByRole('button', { name: /choose files/i }).querySelector('input[type="file"]');
 
     const mockFile = new File(['video content'], 'test-video.mp4', { type: 'video/mp4' });
     Object.defineProperty(mockFile, 'size', { value: 1024 * 1024 });
@@ -323,9 +320,9 @@ describe('File Upload to Export Integration', () => {
 
     localStorageMock.getItem.mockReturnValue(JSON.stringify(savedProject));
 
-    render(<EditorWorkspace />);
+    render(<Index />);
 
-    // Verify saved project is loaded
+    // Verify saved project is loaded and editor workspace is shown (since there are files)
     await waitFor(() => {
       expect(screen.getByText('saved-video.mp4')).toBeInTheDocument();
     });

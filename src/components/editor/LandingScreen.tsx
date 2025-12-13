@@ -1,7 +1,9 @@
-import { UploadArea } from './UploadArea';
+import { useState, useCallback } from 'react';
 import { VideoFile } from '@/types/editor';
-import { Film, Zap, Lock, Clock } from 'lucide-react';
+import { Film, Zap, Lock, Clock, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
+import { useFileUpload } from '@/hooks/useFileUpload';
 
 interface LandingScreenProps {
   onFilesAdded: (files: VideoFile[]) => void;
@@ -10,6 +12,28 @@ interface LandingScreenProps {
 }
 
 export function LandingScreen({ onFilesAdded, onFilesUpdated, onLoadSample }: LandingScreenProps) {
+  const [isDragging, setIsDragging] = useState(false);
+  const { fileInputRef, handleFiles, handleInputChange, handleClick } = useFileUpload({
+    onFilesAdded,
+    onFilesUpdated,
+  });
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    handleFiles(e.dataTransfer.files);
+  }, [handleFiles]);
+
   return (
     <div className="min-h-screen flex flex-col">
       {/* Header */}
@@ -34,7 +58,56 @@ export function LandingScreen({ onFilesAdded, onFilesUpdated, onLoadSample }: La
             </p>
           </div>
 
-          <UploadArea onFilesAdded={onFilesAdded} onFilesUpdated={onFilesUpdated} />
+          <div
+            className={cn(
+              'relative flex flex-col items-center justify-center p-12 rounded-xl border-2 border-dashed transition-all duration-200',
+              isDragging
+                ? 'border-primary bg-primary/5 scale-[1.01]'
+                : 'border-border hover:border-primary/50 hover:bg-muted/50'
+            )}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+          >
+            <div className={cn(
+              'flex items-center justify-center w-16 h-16 rounded-full mb-6 transition-colors',
+              isDragging ? 'bg-primary/20' : 'bg-muted'
+            )}>
+              {isDragging ? (
+                <Upload className="w-8 h-8 text-primary animate-pulse-soft" />
+              ) : (
+                <Film className="w-8 h-8 text-muted-foreground" />
+              )}
+            </div>
+
+            <h3 className="text-lg font-semibold mb-2">
+              {isDragging ? 'Drop your clips here' : 'Upload video clips'}
+            </h3>
+
+            <p className="text-sm text-muted-foreground mb-6 text-center max-w-sm">
+              Drag and drop your video files, or click to browse.
+              <br />
+              <span className="text-xs">Supports MP4 and WebM files (Max 1GB)</span>
+            </p>
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="video/mp4,video/webm"
+              multiple
+              className="hidden"
+              onChange={handleInputChange}
+            />
+            <Button size="lg" className="shadow-card hover:shadow-card-hover" onClick={handleClick}>
+              <Upload className="w-4 h-4 mr-2" />
+              Choose Files
+            </Button>
+
+            <p className="text-xs text-muted-foreground mt-6 flex items-center gap-1">
+              <span className="inline-block w-2 h-2 rounded-full bg-success" />
+              Files never leave your device
+            </p>
+          </div>
 
           <div className="mt-6 text-center">
             <Button variant="link" onClick={onLoadSample} className="text-muted-foreground">

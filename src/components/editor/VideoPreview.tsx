@@ -51,6 +51,7 @@ export function VideoPreview({
             isPlaying={isPlaying}
             speedMultiplier={speedMultiplier}
             previewQuality={previewQuality}
+            totalDuration={totalDuration}
             onTimeChange={onTimeChange}
             onTogglePlayback={onTogglePlayback}
             onLoad={() => {}}

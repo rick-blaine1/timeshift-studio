@@ -11,6 +11,7 @@ import {
 } from './errorHandling';
 import { initFFmpeg, trimVideo, concatVideos, transcodeVideo } from './ffmpeg';
 import { createQueue } from './queue';
+import { storageService } from '@/services/storage';
 
 export interface VideoProcessingOptions {
   speedMultiplier: number;
@@ -50,65 +51,8 @@ export class VideoProcessor {
     files: VideoFileSchema[],
     options: VideoProcessingOptions
   ): Promise<ProcessingResult> {
-    try {
-      if (clips.length === 0) {
-        throw new VideoProcessingError(
-          'No clips to process',
-          ErrorCodes.PROCESSING_FAILED
-        );
-      }
-
-      // Initialize FFmpeg
-      await initFFmpeg();
-
-      // Prepare input files
-      const videoFiles: Blob[] = [];
-      for (const clip of clips) {
-        const file = files.find(f => f.id === clip.fileId);
-        if (!file) {
-          throw new VideoProcessingError(
-            `File not found for clip ${clip.id}`,
-            ErrorCodes.FILE_NOT_FOUND
-          );
-        }
-        videoFiles.push(file.blob);
-      }
-
-      // Process clips
-      let resultBlob: Blob;
-      if (clips.length === 1) {
-        const clip = clips[0];
-        resultBlob = await trimVideo(
-          videoFiles[0],
-          clip.trimStart,
-          clip.trimEnd,
-          clip.speedMultiplier || 1,
-          'output.mp4'
-        );
-      } else {
-        resultBlob = await concatVideos(videoFiles, clips);
-      }
-
-      // Transcode if needed
-      if (options.format !== 'mp4') {
-        resultBlob = await transcodeVideo(resultBlob, {
-          format: options.format,
-          quality: options.quality
-        });
-      }
-
-      return {
-        blob: resultBlob,
-        duration: clips.reduce((sum, clip) => sum + (clip.end - clip.start), 0),
-        size: resultBlob.size
-      };
-    } catch (error) {
-      throw new VideoProcessingError(
-        'FFmpeg processing failed',
-        ErrorCodes.PROCESSING_FAILED,
-        error
-      );
-    }
+    // Delegate to concatenateVideos function
+    return concatenateVideos(clips, files, options);
   }
 
   /**
@@ -120,43 +64,152 @@ export class VideoProcessor {
 }
 
 /**
- * Simple video concatenation using FFmpeg
+ * Simple video concatenation using FFmpeg with speed adjustment and audio removal
  */
 export async function concatenateVideos(
   clips: TimelineClipSchema[],
   files: VideoFileSchema[],
   options: VideoProcessingOptions
 ): Promise<ProcessingResult> {
-  // Initialize FFmpeg
-  await initFFmpeg();
-
-  // Prepare input files
-  const videoFiles: Blob[] = [];
-  for (const clip of clips) {
-    const file = files.find(f => f.id === clip.fileId);
-    if (!file) {
-      throw new VideoProcessingError(
-        `File not found for clip ${clip.id}`,
-        ErrorCodes.FILE_NOT_FOUND
-      );
-    }
-    videoFiles.push(file.blob);
-  }
-
-  const resultBlob = await concatVideos(videoFiles);
-  
-  // Transcode if needed
-  // Always transcode to apply quality settings
-  const transcodedBlob = await transcodeVideo(resultBlob, {
-    format: options.format,
-    quality: options.quality
+  console.log('[VideoProcessor] concatenateVideos called with:', {
+    clipsCount: clips.length,
+    filesCount: files.length,
+    options
   });
   
-  return {
-    blob: transcodedBlob,
-    duration: clips.reduce((sum, clip) => sum + (clip.duration), 0),
-    size: transcodedBlob.size
-  };
+  try {
+    console.log('[VideoProcessor] Initializing FFmpeg...');
+    await initFFmpeg();
+    console.log('[VideoProcessor] FFmpeg initialized successfully');
+
+    // Report initial progress
+    if (options.onProgress) {
+      options.onProgress(5);
+    }
+
+    // Prepare input files - retrieve blobs from storage
+    const videoBlobs: Blob[] = [];
+    let progressStep = 0;
+    const progressPerFile = 30 / clips.length; // 30% for file loading
+
+    for (const clip of clips) {
+      const file = files.find(f => f.id === clip.fileId);
+      if (!file) {
+        throw new VideoProcessingError(
+          `File not found for clip ${clip.id}`,
+          ErrorCodes.FILE_NOT_FOUND
+        );
+      }
+
+      // Retrieve blob from storage
+      let blob: Blob;
+      if (file.indexedDBKey) {
+        try {
+          blob = await storageService.loadVideoFile(file.id);
+        } catch (error) {
+          throw new StorageError(
+            `Failed to load video file ${file.id} from storage`,
+            ErrorCodes.STORAGE_ACCESS_DENIED,
+            error
+          );
+        }
+      } else if (file.fileHandle) {
+        try {
+          const fileData = await file.fileHandle.getFile();
+          blob = fileData;
+        } catch (error) {
+          throw new StorageError(
+            `Failed to load video file ${file.id} from file handle`,
+            ErrorCodes.STORAGE_ACCESS_DENIED,
+            error
+          );
+        }
+      } else {
+        throw new VideoProcessingError(
+          `No storage reference found for file ${file.id}`,
+          ErrorCodes.FILE_NOT_FOUND
+        );
+      }
+
+      videoBlobs.push(blob);
+      
+      progressStep += progressPerFile;
+      if (options.onProgress) {
+        options.onProgress(5 + Math.floor(progressStep));
+      }
+    }
+
+    // Report concatenation start
+    if (options.onProgress) {
+      options.onProgress(35);
+    }
+
+    console.log('[VideoProcessor] Starting concatenation with speed:', options.speedMultiplier);
+
+    // Concatenate videos with speed adjustment and progress reporting
+    const resultBlob = await concatVideos(
+      videoBlobs,
+      options.speedMultiplier,
+      'output.mp4',
+      (ffmpegProgress) => {
+        // Map FFmpeg progress (0-100) to our range (35-70)
+        const mappedProgress = 35 + (ffmpegProgress * 0.35);
+        console.log('[VideoProcessor] FFmpeg concat progress:', ffmpegProgress, '-> mapped:', mappedProgress);
+        if (options.onProgress) {
+          options.onProgress(Math.floor(mappedProgress));
+        }
+      }
+    );
+
+    console.log('[VideoProcessor] Concatenation complete, starting transcode check');
+
+    // Transcode to apply quality settings if needed
+    let finalBlob = resultBlob;
+    if (options.format !== 'mp4' || options.quality !== 'medium') {
+      console.log('[VideoProcessor] Starting transcode to format:', options.format, 'quality:', options.quality);
+      
+      finalBlob = await transcodeVideo(resultBlob, {
+        format: options.format,
+        quality: options.quality,
+        speedMultiplier: 1, // Speed already applied in concat
+        removeAudio: true, // Always remove audio for timelapse
+        onProgress: (ffmpegProgress) => {
+          // Map FFmpeg progress (0-100) to our range (70-95)
+          const mappedProgress = 70 + (ffmpegProgress * 0.25);
+          console.log('[VideoProcessor] FFmpeg transcode progress:', ffmpegProgress, '-> mapped:', mappedProgress);
+          if (options.onProgress) {
+            options.onProgress(Math.floor(mappedProgress));
+          }
+        }
+      });
+      
+      console.log('[VideoProcessor] Transcode complete');
+    } else {
+      console.log('[VideoProcessor] Skipping transcode (already mp4 medium quality)');
+      // Still report progress to 95% even if we skip transcode
+      if (options.onProgress) {
+        options.onProgress(95);
+      }
+    }
+
+    // Report completion
+    if (options.onProgress) {
+      options.onProgress(100);
+    }
+
+    // Calculate output duration based on speed multiplier
+    const totalDuration = clips.reduce((sum, clip) => sum + clip.duration, 0);
+    const outputDuration = totalDuration / options.speedMultiplier;
+
+    return {
+      blob: finalBlob,
+      duration: outputDuration,
+      size: finalBlob.size
+    };
+  } catch (error) {
+    logError(error as Error, { clips: clips.length, files: files.length });
+    throw error;
+  }
 }
 
 /**
@@ -168,17 +221,14 @@ export async function processBatchSequentially(
   onProgress: (batchIndex: number, progress: number) => void
 ): Promise<ProcessingResult[]> {
   const results: ProcessingResult[] = [];
-  const queue = createQueue();
+  const queue = createQueue(1); // Sequential processing
 
-  for (let i = 0; i < batches.length; i++) {
-    const batch = batches[i];
-    await queue.enqueue(async () => {
+  const promises = batches.map((batch, i) =>
+    queue.add(async () => {
       try {
-        let progress = 0;
         const result = await concatenateVideos(batch.clips, batch.files, {
           ...options,
           onProgress: (p) => {
-            progress = p;
             onProgress(i, p);
           }
         });
@@ -188,10 +238,10 @@ export async function processBatchSequentially(
         logError(error as Error, { batchIndex: i });
         throw error;
       }
-    });
-  }
+    })
+  );
 
-  await queue.process();
+  await Promise.all(promises);
   return results;
 }
 

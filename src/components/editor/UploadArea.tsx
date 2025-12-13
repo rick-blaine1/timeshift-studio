@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { Upload, Film, Plus, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -20,9 +20,11 @@ const MAX_FILE_SIZE_BYTES = 1 * 1024 * 1024 * 1024; // 1GB
 
 export function UploadArea({ onFilesAdded, onFilesUpdated, variant = 'full' }: UploadAreaProps) {
   const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
   const handleFiles = useCallback(async (fileList: FileList | null) => {
+    console.log('[UploadArea] handleFiles called with', fileList?.length, 'files');
     if (!fileList || fileList.length === 0) return;
 
     const newVideoFiles: z.infer<typeof VideoFileSchemaValidator>[] = [];
@@ -68,13 +70,14 @@ export function UploadArea({ onFilesAdded, onFilesUpdated, variant = 'full' }: U
         newVideoFiles.push(validatedFile);
 
         // Process metadata and thumbnail asynchronously
-        processVideoFile(file, validatedFile, onFilesUpdated || onFilesAdded).catch(error => {
+        const updateCallback = onFilesUpdated || onFilesAdded;
+        console.log('[UploadArea] Using update callback:', updateCallback === onFilesUpdated ? 'onFilesUpdated' : 'onFilesAdded');
+        processVideoFile(file, validatedFile, updateCallback).catch(error => {
           console.error(`Failed to process ${file.name}:`, error);
           toast({
             variant: 'destructive',
             title: 'Processing Error',
             description: `Failed to process ${file.name}: ${error.message}`,
-            icon: <AlertCircle className="h-4 w-4" />,
           });
         });
 
@@ -85,6 +88,7 @@ export function UploadArea({ onFilesAdded, onFilesUpdated, variant = 'full' }: U
     }
 
     if (newVideoFiles.length > 0) {
+      console.log('[UploadArea] Calling onFilesAdded with', newVideoFiles.length, 'files');
       onFilesAdded(newVideoFiles);
     }
 
@@ -94,11 +98,10 @@ export function UploadArea({ onFilesAdded, onFilesUpdated, variant = 'full' }: U
           variant: 'destructive',
           title: 'Upload Error',
           description: msg,
-          icon: <AlertCircle className="h-4 w-4" />,
         });
       });
     }
-  }, [onFilesAdded, toast]);
+  }, [onFilesAdded, onFilesUpdated, toast]);
 
   // Async function to process video metadata and thumbnail
   const processVideoFile = async (
@@ -212,19 +215,25 @@ export function UploadArea({ onFilesAdded, onFilesUpdated, variant = 'full' }: U
 
   if (variant === 'compact') {
     return (
-      <label className="cursor-pointer">
+      <>
         <input
+          ref={fileInputRef}
           type="file"
           accept="video/mp4,video/webm"
           multiple
           className="hidden"
           onChange={handleInputChange}
         />
-        <Button variant="outline" size="sm" className="w-full">
+        <Button
+          variant="outline"
+          size="sm"
+          className="w-full"
+          onClick={() => fileInputRef.current?.click()}
+        >
           <Plus className="w-4 h-4 mr-2" />
           Add clips
         </Button>
-      </label>
+      </>
     );
   }
 

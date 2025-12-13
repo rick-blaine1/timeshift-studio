@@ -1,84 +1,136 @@
-import { TimelineClipSchema } from '@/types/schema/Timeline';
-import { VideoFileSchema } from '@/types/schema/VideoFile';
+let timeline: any[] = [];
+let files: any[] = [];
+let previewQuality: 'proxy' | 'high' = 'high';
+
+let canvasWidth = 960;
+let canvasHeight = 540;
+
+let currentPlaybackTime = 0;
+let speedMultiplier = 1;
+
+// Send worker_ready immediately when worker starts
+console.log('[VideoWorker] Worker initialized, sending ready signal');
+self.postMessage({ type: 'worker_ready' });
 
 self.onmessage = async (e) => {
-  const { clip, file, canvasWidth, canvasHeight, speedMultiplier } = e.data;
-  
+  const { type, timeline: newTimeline, files: newFiles, previewQuality: newQuality, time, speed, bitmap } = e.data;
+
+  console.log('[VideoWorker] Received message:', type, {
+    timelineLength: newTimeline?.length,
+    filesLength: newFiles?.length,
+    time,
+    speed
+  });
+
   try {
-    const startTime = clip.trimStart || 0;
-    const endTime = clip.trimEnd || file.duration;
-    const clipDuration = endTime - startTime;
-    
-    if (clipDuration <= 0) {
-      throw new Error('Invalid clip duration');
-    }
-    
-    const video = document.createElement('video');
-    video.muted = true;
-    video.playsInline = true;
-    video.crossOrigin = 'anonymous';
-    
-    let videoUrl: string | null = null;
-    
-    if (file.fileHandle) {
-      const fileData = await file.fileHandle.getFile();
-      videoUrl = URL.createObjectURL(fileData);
-    } else if (file.indexedDBKey) {
-      const { storageService } = await import('@/services/storage');
-      const blob = await storageService.loadVideoFile(file.id);
-      videoUrl = URL.createObjectURL(blob);
-    } else {
-      throw new Error('No video file source available');
-    }
-    
-    video.src = videoUrl;
-    await new Promise((resolve) => {
-      video.onloadedmetadata = resolve;
-    });
-    
-    video.currentTime = startTime;
-    
-    const frameCount = Math.floor((clipDuration / speedMultiplier) * 30);
-    const frameInterval = (clipDuration * 1000) / frameCount;
-    
-    const canvas = new OffscreenCanvas(canvasWidth, canvasHeight);
-    const ctx = canvas.getContext('2d');
-    if (!ctx) throw new Error('Could not get canvas context');
-    
-    await new Promise<void>((resolve) => {
-      let framesProcessed = 0;
-      
-      const processFrame = async () => {
-        if (framesProcessed >= frameCount) {
-          if (videoUrl) URL.revokeObjectURL(videoUrl);
-          resolve();
+    switch (type) {
+      case 'init_preview':
+        console.log('[VideoWorker] Initializing preview with:', {
+          timeline: newTimeline,
+          files: newFiles,
+          quality: newQuality
+        });
+        timeline = newTimeline;
+        files = newFiles;
+        previewQuality = newQuality;
+
+        if (previewQuality === 'proxy') {
+          canvasWidth = 960;
+          canvasHeight = 540;
+        } else {
+          if (files.length > 0) {
+            canvasWidth = files[0].width || 1920;
+            canvasHeight = files[0].height || 1080;
+          }
+        }
+
+        console.log('[VideoWorker] Preview initialized, canvas size:', canvasWidth, 'x', canvasHeight);
+        break;
+
+      case 'seek':
+        currentPlaybackTime = time;
+        speedMultiplier = speed || 1;
+
+        // Find the clip at the current playback time
+        let clip = null;
+        for (const c of timeline) {
+          if (currentPlaybackTime >= c.startTime && currentPlaybackTime < c.startTime + c.duration) {
+            clip = c;
+            break;
+          }
+        }
+
+        console.log('[VideoWorker] Seeking to time:', currentPlaybackTime, 'Found clip:', clip);
+        
+        if (!clip) {
+          console.log('[VideoWorker] No clip at current time, sending black frame');
+          // No clip at this time - send blank frame
+          const canvas = new OffscreenCanvas(canvasWidth, canvasHeight);
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.fillStyle = 'black';
+            ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+            const bitmap = canvas.transferToImageBitmap();
+            self.postMessage({ type: 'frame', payload: { bitmap } }, { transfer: [bitmap] });
+          }
           return;
         }
+
+        const file = files.find(f => f.id === clip.fileId);
+        console.log('[VideoWorker] Looking for file:', clip.fileId, 'Found:', !!file);
+        if (!file) {
+          console.error('[VideoWorker] File not found for clip:', clip.fileId);
+          self.postMessage({ type: 'error', payload: { message: 'File not found for clip' } });
+          return;
+        }
+
+        // Calculate the local time within the video file
+        const localTime = (currentPlaybackTime - clip.startTime) + (clip.trimStart || 0);
+
+        console.log('[VideoWorker] Requesting frame from main thread for file:', file.id, 'at time:', localTime);
         
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const bitmap = await createImageBitmap(canvas);
-        
+        // Request the main thread to provide a video frame
         self.postMessage({
-          type: 'frame',
-          bitmap,
-          frameIndex: framesProcessed
-        }, [bitmap]);
+          type: 'request_frame',
+          payload: {
+            fileId: file.id,
+            time: localTime,
+            canvasWidth,
+            canvasHeight,
+          }
+        });
+        break;
+
+      case 'provide_frame':
+        // Receive a frame bitmap from the main thread
+        console.log('[VideoWorker] Received frame from main thread, bitmap:', !!bitmap, 'size:', bitmap?.width, 'x', bitmap?.height);
         
-        framesProcessed++;
-        video.currentTime = startTime + (framesProcessed * clipDuration / frameCount);
-        
-        setTimeout(processFrame, frameInterval);
-      };
-      
-      video.onseeked = processFrame;
-    });
-    
-    self.postMessage({ type: 'complete' });
+        if (bitmap) {
+          // Forward the bitmap to the canvas with transfer list
+          self.postMessage({ type: 'frame', payload: { bitmap } }, { transfer: [bitmap] });
+        } else {
+          // Send black frame if no bitmap provided
+          const canvas = new OffscreenCanvas(canvasWidth, canvasHeight);
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.fillStyle = 'black';
+            ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+            const emptyBitmap = canvas.transferToImageBitmap();
+            self.postMessage({ type: 'frame', payload: { bitmap: emptyBitmap } }, { transfer: [emptyBitmap] });
+          }
+        }
+        break;
+
+      case 'destroy':
+        console.log('[VideoWorker] Destroying worker');
+        self.close();
+        break;
+    }
   } catch (error) {
-    self.postMessage({ 
-      type: 'error', 
-      error: error instanceof Error ? error.message : 'Unknown error' 
+    console.error('[VideoWorker] Top-level error:', error);
+    self.postMessage({
+      type: 'error',
+      payload: { message: error instanceof Error ? error.message : 'Unknown error' },
     });
   }
 };
