@@ -3,6 +3,9 @@ import { VideoProcessingError, ErrorCodes } from './errorHandling';
 
 let ffmpegInstance: any = null;
 let currentOnProgress: ((progress: number) => void) | undefined;
+let currentOnFrameProgress: ((frame: number, fps: number, fullLogLine?: string) => void) | undefined;
+let consecutiveZeroRatioCount: number = 0;
+const ZERO_RATIO_THRESHOLD = 5; // If ratio is 0 for 5 consecutive reports, stop reporting it
 
 /**
  * Initialize FFmpeg.wasm instance
@@ -45,11 +48,43 @@ export async function initFFmpeg(): Promise<any> {
     const ffmpeg = createFFmpeg({
       log: true,
       corePath: 'https://unpkg.com/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js',
+      logger: ({ type, message }) => {
+        // Parse FFmpeg log messages to extract frame information
+        // Example: "frame=  123 fps= 45 q=28.0 size=    1024kB time=00:00:05.12 bitrate=1638.4kbits/s speed=1.89x"
+        // FFmpeg outputs progress info to stderr (type 'fferr')
+        if (currentOnFrameProgress && (type === 'fferr' || type === 'ffout')) {
+          const frameMatch = message.match(/frame=\s*(\d+)/);
+          const fpsMatch = message.match(/fps=\s*([\d.]+)/);
+          
+          if (frameMatch) {
+            const frame = parseInt(frameMatch[1], 10);
+            const fps = fpsMatch ? parseFloat(fpsMatch[1]) : 0;
+            // Pass the full log line for display
+            console.log('[FFmpeg] Frame progress detected:', { frame, fps, type, message });
+            currentOnFrameProgress(frame, fps, message);
+          }
+        }
+      },
       progress: ({ ratio }) => {
-        console.log('[FFmpeg Progress]', { progress: ratio });
-        if (currentOnProgress) {
+        // FFmpeg.wasm sometimes reports NaN for ratio, especially at the start
+        // Only report progress if we have a valid number
+        if (currentOnProgress && !isNaN(ratio) && isFinite(ratio)) {
+          if (ratio === 0) {
+            consecutiveZeroRatioCount++;
+            if (consecutiveZeroRatioCount > ZERO_RATIO_THRESHOLD) {
+              // If ratio is 0 for too long, don't report it to prevent stalling
+              console.warn('[FFmpeg Progress] Suppressing 0 ratio due to consecutive reports. Ratio:', ratio);
+              return;
+            }
+          } else {
+            consecutiveZeroRatioCount = 0; // Reset counter if a non-zero ratio is received
+          }
+
           const progressPercent = Math.min(Math.max(ratio * 100, 0), 100);
+          console.log('[FFmpeg Progress]', { ratio, progressPercent, consecutiveZeroRatioCount });
           currentOnProgress(progressPercent);
+        } else if (currentOnProgress && (isNaN(ratio) || !isFinite(ratio))) {
+          console.warn('[FFmpeg Progress] Invalid ratio received:', ratio);
         }
       },
     });
@@ -72,19 +107,7 @@ export async function initFFmpeg(): Promise<any> {
       console.log('[FFmpeg] Calling ffmpeg.load() at', new Date().toISOString());
       console.log('[FFmpeg] Note: corePath was set in createFFmpeg() options');
       
-      const loadPromise = ffmpeg.load();
-      console.log('[FFmpeg] load() promise created, waiting for resolution...');
-      
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => {
-          const elapsed = Date.now() - startTime;
-          console.error('[FFmpeg] ❌ Timeout reached after 120 seconds');
-          console.error('[FFmpeg] Elapsed time:', elapsed, 'ms');
-          reject(new Error('FFmpeg load timeout after 120 seconds'));
-        }, 120000);
-      });
-      
-      await Promise.race([loadPromise, timeoutPromise]);
+      await ffmpeg.load();
       
       const elapsed = Date.now() - startTime;
       console.log('[FFmpeg] ========================================');
@@ -125,10 +148,14 @@ export async function trimVideo(
   end: number,
   speedMultiplier: number = 1,
   outputName: string = 'output.mp4',
-  onProgress?: (progress: number) => void
+  onProgress?: (progress: number) => void,
+  onFrameProgress?: (frame: number, fps: number, fullLogLine?: string) => void
 ): Promise<Blob> {
   const ffmpeg = await initFFmpeg();
   const inputName = 'input.mp4';
+  currentOnProgress = onProgress; // Set global progress handler
+  currentOnFrameProgress = onFrameProgress; // Set global frame progress handler
+  consecutiveZeroRatioCount = 0; // Reset counter for new operation
 
   console.log('[FFmpeg] Starting trim operation');
 
@@ -163,9 +190,7 @@ export async function trimVideo(
 
     console.log('[FFmpeg] Executing trim command:', command.join(' '));
     
-    currentOnProgress = onProgress;
     await ffmpeg.run(...command);
-    currentOnProgress = undefined;
     
     console.log('[FFmpeg] Trim complete');
     const data = ffmpeg.FS('readFile', outputName);
@@ -177,6 +202,8 @@ export async function trimVideo(
       error
     );
   } finally {
+    currentOnProgress = undefined; // Clear global progress handler
+    currentOnFrameProgress = undefined; // Clear global frame progress handler
     try {
       ffmpeg.FS('unlink', inputName);
     } catch (e) {
@@ -197,11 +224,15 @@ export async function concatVideos(
   inputs: (File | Blob)[],
   speedMultiplier: number = 1,
   outputName: string = 'output.mp4',
-  onProgress?: (progress: number) => void
+  onProgress?: (progress: number) => void,
+  onFrameProgress?: (frame: number, fps: number, fullLogLine?: string) => void
 ): Promise<Blob> {
   const ffmpeg = await initFFmpeg();
   const concatFile = 'filelist.txt';
   const fileNames: string[] = [];
+  currentOnProgress = onProgress; // Set global progress handler for concat
+  currentOnFrameProgress = onFrameProgress; // Set global frame progress handler for concat
+  consecutiveZeroRatioCount = 0; // Reset counter for new operation
   
   console.log('[FFmpeg] Starting concatenation of', inputs.length, 'videos');
   
@@ -249,9 +280,7 @@ export async function concatVideos(
 
     console.log('[FFmpeg] Executing concat command:', command.join(' '));
     
-    currentOnProgress = onProgress;
     await ffmpeg.run(...command);
-    currentOnProgress = undefined;
     
     console.log('[FFmpeg] Concatenation complete');
 
@@ -264,8 +293,11 @@ export async function concatVideos(
       error
     );
   } finally {
-    // Remove progress listener (FFmpeg.wasm doesn't require explicit cleanup)
-    
+    // Always clear the currentOnProgress handler in finally block
+    currentOnProgress = undefined; // Clear global progress handler
+    currentOnFrameProgress = undefined; // Clear global frame progress handler
+    consecutiveZeroRatioCount = 0; // Reset for next operation
+
     // Cleanup
     for (const name of fileNames) {
       try {
@@ -276,6 +308,7 @@ export async function concatVideos(
     }
     try {
       ffmpeg.FS('unlink', concatFile);
+      
     } catch (e) {
       console.warn('[FFmpeg] Failed to delete', concatFile, e);
     }
@@ -286,7 +319,6 @@ export async function concatVideos(
     }
   }
 }
-
 /**
  * Transcode video to different format/quality with speed adjustment
  */
@@ -299,11 +331,15 @@ export async function transcodeVideo(
     speedMultiplier?: number;
     removeAudio?: boolean;
     onProgress?: (progress: number) => void;
+    onFrameProgress?: (frame: number, fps: number, fullLogLine?: string) => void;
   },
   outputName: string = 'output'
 ): Promise<Blob> {
   const ffmpeg = await initFFmpeg();
   const inputName = 'input.mp4';
+  currentOnProgress = options.onProgress; // Set global progress handler for transcode
+  currentOnFrameProgress = options.onFrameProgress; // Set global frame progress handler for transcode
+  consecutiveZeroRatioCount = 0; // Reset counter for new operation
 
   console.log('[FFmpeg] Starting transcode operation');
 
@@ -377,9 +413,7 @@ export async function transcodeVideo(
 
     console.log('[FFmpeg] Executing transcode command:', command.join(' '));
     
-    currentOnProgress = options.onProgress;
     await ffmpeg.run(...command);
-    currentOnProgress = undefined;
     
     console.log('[FFmpeg] Transcode complete');
     const data = ffmpeg.FS('readFile', outputFile);
@@ -391,6 +425,9 @@ export async function transcodeVideo(
       error
     );
   } finally {
+    currentOnProgress = undefined; // Clear global progress handler
+    currentOnFrameProgress = undefined; // Clear global frame progress handler
+    consecutiveZeroRatioCount = 0; // Reset for next operation
     try {
       ffmpeg.FS('unlink', inputName);
     } catch (e) {
@@ -402,5 +439,5 @@ export async function transcodeVideo(
     } catch (e) {
       console.warn('[FFmpeg] Failed to delete', `${outputName}.${outputExt}`, e);
     }
-  }
+   }
 }

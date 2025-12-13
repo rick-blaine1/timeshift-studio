@@ -10,7 +10,7 @@ import { storageService } from '@/services/storage';
 const MAX_FILE_SIZE_BYTES = 1 * 1024 * 1024 * 1024; // 1GB
 
 interface UseFileUploadOptions {
-  onFilesAdded: (files: z.infer<typeof VideoFileSchemaValidator>[]) => void;
+  onFilesAdded: (files: z.infer<typeof VideoFileSchemaValidator>[], originalFiles?: Map<string, File>) => void;
   onFilesUpdated?: (files: z.infer<typeof VideoFileSchemaValidator>[]) => void;
 }
 
@@ -112,6 +112,7 @@ export function useFileUpload({ onFilesAdded, onFilesUpdated }: UseFileUploadOpt
     if (!fileList || fileList.length === 0) return;
 
     const newVideoFiles: z.infer<typeof VideoFileSchemaValidator>[] = [];
+    const originalFilesMap = new Map<string, File>();
     const errors: string[] = [];
 
     for (const file of Array.from(fileList)) {
@@ -152,6 +153,9 @@ export function useFileUpload({ onFilesAdded, onFilesUpdated }: UseFileUploadOpt
         // Validate initial structure
         const validatedFile = VideoFileSchemaValidator.parse(initialVideoFile);
         newVideoFiles.push(validatedFile);
+        
+        // Store original File object for immediate playback
+        originalFilesMap.set(fileId, file);
 
         // Process metadata and thumbnail asynchronously
         const updateCallback = onFilesUpdated || onFilesAdded;
@@ -172,8 +176,8 @@ export function useFileUpload({ onFilesAdded, onFilesUpdated }: UseFileUploadOpt
     }
 
     if (newVideoFiles.length > 0) {
-      console.log('[useFileUpload] Calling onFilesAdded with', newVideoFiles.length, 'files');
-      onFilesAdded(newVideoFiles);
+      console.log('[useFileUpload] Calling onFilesAdded with', newVideoFiles.length, 'files and original File objects');
+      onFilesAdded(newVideoFiles, originalFilesMap);
     }
 
     if (errors.length > 0) {

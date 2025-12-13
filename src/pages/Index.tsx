@@ -5,7 +5,7 @@ import { EditorWorkspace } from '@/components/editor/EditorWorkspace';
 
 const Index = () => {
   console.log('[DEBUG] Rendering Index component');
-  const { state, actions, computed } = useEditorState();
+  const { state, actions, computed, originalFiles } = useEditorState();
   const hasFiles = state.files.length > 0;
 
   if (!hasFiles) {
@@ -24,7 +24,13 @@ const Index = () => {
     return (
       <div className="h-screen flex flex-col overflow-hidden">
         <TopNav />
-        <EditorWorkspace state={state} actions={actions} computed={computed} />
+        <EditorWorkspace
+          state={state}
+          actions={actions}
+          computed={computed}
+          originalFiles={originalFiles}
+          resolutionMismatch={state.resolutionMismatch}
+        />
       </div>
     );
   } catch (error) {

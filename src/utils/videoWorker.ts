@@ -25,11 +25,13 @@ self.onmessage = async (e) => {
   try {
     switch (type) {
       case 'init_preview':
-        console.log('[VideoWorker] Initializing preview with:', {
-          timeline: newTimeline,
-          files: newFiles,
-          quality: newQuality
-        });
+console.log('[VideoWorker] Initializing preview with:', {
+  timeline: newTimeline,
+  files: newFiles,
+  quality: newQuality
+});
+console.log('[VideoWorker] newTimeline content:', newTimeline);
+console.log('[VideoWorker] newFiles content:', newFiles);
         timeline = newTimeline;
         files = newFiles;
         previewQuality = newQuality;
@@ -50,10 +52,12 @@ self.onmessage = async (e) => {
       case 'seek':
         currentPlaybackTime = time;
         speedMultiplier = speed || 1;
+        console.log('[VideoWorker] Seeking. currentPlaybackTime:', currentPlaybackTime, 'timeline:', timeline);
 
         // Find the clip at the current playback time
         let clip = null;
         for (const c of timeline) {
+          console.log('[VideoWorker] Checking clip:', c.id, 'startTime:', c.startTime, 'duration:', c.duration, 'currentPlaybackTime:', currentPlaybackTime);
           if (currentPlaybackTime >= c.startTime && currentPlaybackTime < c.startTime + c.duration) {
             clip = c;
             break;

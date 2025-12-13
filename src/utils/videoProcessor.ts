@@ -18,6 +18,7 @@ export interface VideoProcessingOptions {
   quality: 'low' | 'medium' | 'high';
   format: 'mp4' | 'webm';
   onProgress?: (progress: number) => void;
+  onFrameProgress?: (frame: number, fps: number, fullLogLine?: string) => void;
   maxMemoryUsage?: number; // Maximum memory usage in MB
 }
 
@@ -76,7 +77,9 @@ export async function concatenateVideos(
     filesCount: files.length,
     options
   });
-  
+  console.log('[VideoProcessor] Clips received:', clips.map(c => ({ id: c.id, fileId: c.fileId, trimStart: c.trimStart, trimEnd: c.trimEnd, duration: c.duration, order: c.order })));
+  console.log('[VideoProcessor] Files received:', files.map(f => ({ id: f.id, name: f.name, duration: f.duration })));
+
   try {
     console.log('[VideoProcessor] Initializing FFmpeg...');
     await initFFmpeg();
@@ -87,12 +90,13 @@ export async function concatenateVideos(
       options.onProgress(5);
     }
 
-    // Prepare input files - retrieve blobs from storage
+    // Prepare input files - retrieve blobs from storage and trim each clip
     const videoBlobs: Blob[] = [];
     let progressStep = 0;
-    const progressPerFile = 30 / clips.length; // 30% for file loading
-
-    for (const clip of clips) {
+    const progressPerClip = clips.length > 0 ? 30 / clips.length : 0; // Avoid division by zero
+    
+    for (let i = 0; i < clips.length; i++) {
+      const clip = clips[i];
       const file = files.find(f => f.id === clip.fileId);
       if (!file) {
         throw new VideoProcessingError(
@@ -100,7 +104,15 @@ export async function concatenateVideos(
           ErrorCodes.FILE_NOT_FOUND
         );
       }
-
+      console.log('[VideoProcessor] Processing clip', {
+        clipId: clip.id,
+        fileId: clip.fileId,
+        trimStart: clip.trimStart,
+        trimEnd: clip.trimEnd,
+        duration: clip.duration,
+        order: i
+      });
+  
       // Retrieve blob from storage
       let blob: Blob;
       if (file.indexedDBKey) {
@@ -131,35 +143,121 @@ export async function concatenateVideos(
         );
       }
 
-      videoBlobs.push(blob);
+      // Trim the clip if needed (trimStart and trimEnd are defined)
+      let processedBlob = blob;
+      if (clip.trimStart !== undefined && clip.trimEnd !== undefined &&
+          (clip.trimStart > 0 || clip.trimEnd < file.duration)) {
+        console.log(`[VideoProcessor] Trimming clip ${clip.id} from ${clip.trimStart}s to ${clip.trimEnd}s`);
+        
+        // Use the clip's individual speed multiplier if set, otherwise use 1 (no speed change during trim)
+        const clipSpeed = clip.speedMultiplier || 1;
+        
+        // Simulate progress for this clip since FFmpeg doesn't report accurate progress with speed changes
+        const clipStartProgress = 5 + progressStep;
+        const clipDuration = clip.trimEnd - clip.trimStart;
+        const estimatedProcessingTime = clipDuration * 100; // Rough estimate: 100ms per second of video
+        
+        // Start a progress simulation
+        let simulatedProgress = 0;
+        const progressInterval = setInterval(() => {
+          simulatedProgress += 2; // Increment by 2% every interval
+          if (simulatedProgress < 90) { // Cap at 90% until actual completion
+            const mappedProgress = clipStartProgress + (simulatedProgress / 100) * progressPerClip;
+            if (options.onProgress) {
+              options.onProgress(Math.floor(mappedProgress));
+            }
+          }
+        }, estimatedProcessingTime / 50); // Update 50 times during processing
+        
+        try {
+          processedBlob = await trimVideo(
+            blob,
+            clip.trimStart,
+            clip.trimEnd,
+            clipSpeed,
+            `clip_${clip.id}.mp4`,
+            (trimProgress) => {
+              // Map trim progress to overall progress range for this clip
+              const mappedProgress = clipStartProgress + (trimProgress / 100) * progressPerClip;
+              if (options.onProgress) {
+                options.onProgress(Math.floor(mappedProgress));
+              }
+            },
+            options.onFrameProgress
+          );
+        } finally {
+          clearInterval(progressInterval);
+        }
+      }
+
+      videoBlobs.push(processedBlob);
+      console.log('[VideoProcessor] Added blob for clip', clip.id, 'size', processedBlob.size, 'type', processedBlob.type, 'processedBlob:', processedBlob);
       
-      progressStep += progressPerFile;
+      progressStep += progressPerClip;
       if (options.onProgress) {
         options.onProgress(5 + Math.floor(progressStep));
       }
     }
 
-    // Report concatenation start
-    if (options.onProgress) {
-      options.onProgress(35);
-    }
+    console.log('[VideoProcessor] Final videoBlobs array before concatenation:', videoBlobs.length, 'blobs:', videoBlobs.map((b, index) => ({ index: index, size: b.size, type: b.type })));
 
     console.log('[VideoProcessor] Starting concatenation with speed:', options.speedMultiplier);
+    console.log('[VideoProcessor] Number of processed clips to concatenate:', videoBlobs.length);
 
-    // Concatenate videos with speed adjustment and progress reporting
-    const resultBlob = await concatVideos(
-      videoBlobs,
-      options.speedMultiplier,
-      'output.mp4',
-      (ffmpegProgress) => {
-        // Map FFmpeg progress (0-100) to our range (35-70)
-        const mappedProgress = 35 + (ffmpegProgress * 0.35);
-        console.log('[VideoProcessor] FFmpeg concat progress:', ffmpegProgress, '-> mapped:', mappedProgress);
-        if (options.onProgress) {
+    // Blend simulated and native FFmpeg progress for concatenation
+    const concatStartProgress = 35;
+    const concatEndProgress = 70;
+    const estimatedConcatDuration = Math.max(videoBlobs.length * 500, 5000); // At least 5 seconds, rough estimate: 500ms per video
+
+    let simulatedConcatProgress = 0;
+    let nativeConcatProgress = 0;
+    let concatProgressInterval: NodeJS.Timeout | undefined;
+
+    // Start simulated progress immediately
+    if (options.onProgress) {
+      // Report initial progress
+      options.onProgress(concatStartProgress);
+      
+      concatProgressInterval = setInterval(() => {
+        simulatedConcatProgress += 2; // Increment by 2% every interval
+        if (simulatedConcatProgress < 90) { // Cap at 90% until actual completion
+          // Report the maximum of simulated or native progress
+          const effectiveProgress = Math.max(simulatedConcatProgress, nativeConcatProgress);
+          const mappedProgress = concatStartProgress + (effectiveProgress / 100) * (concatEndProgress - concatStartProgress);
           options.onProgress(Math.floor(mappedProgress));
         }
+      }, estimatedConcatDuration / 50); // Update 50 times during processing
+    }
+
+    let resultBlob: Blob;
+    try {
+      // Concatenate videos with speed adjustment
+      // Note: Individual clip speeds were already applied during trimming
+      // The global speed multiplier is applied here for any clips that didn't have individual speeds
+      resultBlob = await concatVideos(
+        videoBlobs,
+        options.speedMultiplier,
+        'output.mp4',
+        (nativeProgress) => {
+          // Update native progress from FFmpeg
+          nativeConcatProgress = nativeProgress;
+          // Report the maximum of simulated or native progress
+          const effectiveProgress = Math.max(simulatedConcatProgress, nativeConcatProgress);
+          const mappedProgress = concatStartProgress + (effectiveProgress / 100) * (concatEndProgress - concatStartProgress);
+          if (options.onProgress) {
+            options.onProgress(Math.floor(mappedProgress));
+          }
+        },
+        options.onFrameProgress
+      );
+      if (options.onProgress) {
+        options.onProgress(concatEndProgress); // Jump to end of concat range
       }
-    );
+    } finally {
+      if (concatProgressInterval) {
+        clearInterval(concatProgressInterval);
+      }
+    }
 
     console.log('[VideoProcessor] Concatenation complete, starting transcode check');
 
@@ -167,21 +265,59 @@ export async function concatenateVideos(
     let finalBlob = resultBlob;
     if (options.format !== 'mp4' || options.quality !== 'medium') {
       console.log('[VideoProcessor] Starting transcode to format:', options.format, 'quality:', options.quality);
+
+      // Blend simulated and native FFmpeg progress for transcode
+      const transcodeStartProgress = concatEndProgress; // 70
+      const transcodeEndProgress = 95;
+      // Estimate transcode duration (e.g., 10 seconds per minute of video, adjusted for quality)
+      const estimatedTranscodeDuration = Math.max((resultBlob.size / (1024 * 1024)) * 1000 * (options.quality === 'low' ? 0.5 : options.quality === 'medium' ? 1 : 2), 5000); // At least 5 seconds
       
-      finalBlob = await transcodeVideo(resultBlob, {
-        format: options.format,
-        quality: options.quality,
-        speedMultiplier: 1, // Speed already applied in concat
-        removeAudio: true, // Always remove audio for timelapse
-        onProgress: (ffmpegProgress) => {
-          // Map FFmpeg progress (0-100) to our range (70-95)
-          const mappedProgress = 70 + (ffmpegProgress * 0.25);
-          console.log('[VideoProcessor] FFmpeg transcode progress:', ffmpegProgress, '-> mapped:', mappedProgress);
-          if (options.onProgress) {
+      let simulatedTranscodeProgress = 0;
+      let nativeTranscodeProgress = 0;
+      let transcodeProgressInterval: NodeJS.Timeout | undefined;
+
+      // Start simulated progress immediately
+      if (options.onProgress) {
+        // Report initial progress
+        options.onProgress(transcodeStartProgress);
+        
+        transcodeProgressInterval = setInterval(() => {
+          simulatedTranscodeProgress += 2; // Increment by 2% every interval
+          if (simulatedTranscodeProgress < 90) { // Cap at 90% until actual completion
+            // Report the maximum of simulated or native progress
+            const effectiveProgress = Math.max(simulatedTranscodeProgress, nativeTranscodeProgress);
+            const mappedProgress = transcodeStartProgress + (effectiveProgress / 100) * (transcodeEndProgress - transcodeStartProgress);
             options.onProgress(Math.floor(mappedProgress));
           }
+        }, estimatedTranscodeDuration / 50); // Update 50 times during processing
+      }
+
+      try {
+        finalBlob = await transcodeVideo(resultBlob, {
+          format: options.format,
+          quality: options.quality,
+          speedMultiplier: 1, // Speed already applied in concat
+          removeAudio: true, // Always remove audio for timelapse
+          onProgress: (nativeProgress) => {
+            // Update native progress from FFmpeg
+            nativeTranscodeProgress = nativeProgress;
+            // Report the maximum of simulated or native progress
+            const effectiveProgress = Math.max(simulatedTranscodeProgress, nativeTranscodeProgress);
+            const mappedProgress = transcodeStartProgress + (effectiveProgress / 100) * (transcodeEndProgress - transcodeStartProgress);
+            if (options.onProgress) {
+              options.onProgress(Math.floor(mappedProgress));
+            }
+          },
+          onFrameProgress: options.onFrameProgress
+        });
+        if (options.onProgress) {
+          options.onProgress(transcodeEndProgress); // Jump to end of transcode range
         }
-      });
+      } finally {
+        if (transcodeProgressInterval) {
+          clearInterval(transcodeProgressInterval);
+        }
+      }
       
       console.log('[VideoProcessor] Transcode complete');
     } else {

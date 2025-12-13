@@ -14,11 +14,12 @@ interface UploadAreaProps {
   onFilesAdded: (files: z.infer<typeof VideoFileSchemaValidator>[]) => void;
   onFilesUpdated?: (files: z.infer<typeof VideoFileSchemaValidator>[]) => void;
   variant?: 'full' | 'compact';
+  resolutionMismatch?: boolean; // New prop for resolution mismatch warning
 }
 
 const MAX_FILE_SIZE_BYTES = 1 * 1024 * 1024 * 1024; // 1GB
 
-export function UploadArea({ onFilesAdded, onFilesUpdated, variant = 'full' }: UploadAreaProps) {
+export function UploadArea({ onFilesAdded, onFilesUpdated, variant = 'full', resolutionMismatch }: UploadAreaProps) {
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
@@ -223,6 +224,7 @@ export function UploadArea({ onFilesAdded, onFilesUpdated, variant = 'full' }: U
           multiple
           className="hidden"
           onChange={handleInputChange}
+          data-testid="compact-file-input" // Add data-testid for easy selection in tests
         />
         <Button
           variant="outline"
@@ -269,6 +271,13 @@ export function UploadArea({ onFilesAdded, onFilesUpdated, variant = 'full' }: U
         <br />
         <span className="text-xs">Supports MP4 and WebM files (Max 1GB)</span>
       </p>
+
+      {resolutionMismatch && (
+        <div className="flex items-center gap-2 text-warning mb-4">
+          <AlertCircle className="w-5 h-5" />
+          <p className="text-sm">Mixed resolutions detected. For export, all clips must have the same resolution.</p>
+        </div>
+      )}
 
       <label className="cursor-pointer">
         <input

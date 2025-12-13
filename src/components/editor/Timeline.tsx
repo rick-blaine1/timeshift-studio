@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { TimelineClip as TimelineClipType, VideoFile } from '@/types/editor';
+import { VideoFileStatus } from '@/types/schema/VideoFile';
 import { formatDuration } from '@/data/sampleData';
-import { X, GripHorizontal } from 'lucide-react';
+import { X, GripHorizontal, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 

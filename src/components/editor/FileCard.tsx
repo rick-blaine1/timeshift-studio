@@ -1,11 +1,11 @@
-import { VideoFileSchema } from '@/types/schema/VideoFile';
+import { VideoFile } from '@/types/editor';
 import { formatDuration, formatFileSize } from '@/data/sampleData';
 import { X, GripVertical, Check, AlertCircle, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 interface FileCardProps {
-  file: VideoFileSchema;
+  file: VideoFile;
   onRemove: () => void;
   onAddToTimeline: () => void;
   onSpeedChange?: (fileId: string, speed: number) => void;

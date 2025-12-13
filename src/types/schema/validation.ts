@@ -75,6 +75,7 @@ export const ProjectSchemaValidator = z.object({
   createdAt: z.number(),
   updatedAt: z.number(),
   lastExportAt: z.number().optional(),
+  resolutionMismatch: z.boolean().optional(), // Add resolutionMismatch to the schema
 });
 
 // Validation helper functions

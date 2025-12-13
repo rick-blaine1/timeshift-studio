@@ -22,6 +22,7 @@ export interface ProjectSchema {
   createdAt: number;
   updatedAt: number;
   lastExportAt?: number;
+  resolutionMismatch?: boolean; // New field to indicate resolution mismatch
 }
 
 export interface ExportSettingsSchema {

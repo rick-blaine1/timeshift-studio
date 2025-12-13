@@ -316,6 +316,7 @@ describe('File Upload to Export Integration', () => {
       version: '1.0.0',
       createdAt: Date.now(),
       updatedAt: Date.now(),
+      resolutionMismatch: false, // Added for new test
     };
 
     localStorageMock.getItem.mockReturnValue(JSON.stringify(savedProject));
@@ -334,5 +335,63 @@ describe('File Upload to Export Integration', () => {
 
     // Verify speed multiplier is restored
     expect(screen.getByDisplayValue('2')).toBeInTheDocument();
+  });
+
+  it('displays a warning when clips with different resolutions are added', async () => {
+    // Mock metadata for different resolutions
+    const { extractVideoMetadata } = await import('@/utils/videoMetadata');
+    vi.mocked(extractVideoMetadata).mockImplementation(async (file: File) => {
+      if (file.name === 'hd-video.mp4') {
+        return { duration: 60, width: 1280, height: 720, framerate: 30 };
+      }
+      return { duration: 120, width: 1920, height: 1080, framerate: 30 };
+    });
+
+    render(<Index />);
+
+    // Upload first file (1080p)
+    const fileInput = screen.getByRole('button', { name: /choose files/i }).querySelector('input[type="file"]');
+    const mockFile1 = new File(['video content'], 'fullhd-video.mp4', {
+      type: 'video/mp4',
+      lastModified: Date.now(),
+    });
+    Object.defineProperty(mockFile1, 'size', { value: 1024 * 1024 });
+
+    if (fileInput) {
+      Object.defineProperty(fileInput, 'files', {
+        value: [mockFile1],
+        writable: false,
+      });
+      fireEvent.change(fileInput);
+    }
+
+    await waitFor(() => {
+      expect(screen.getByText('fullhd-video.mp4')).toBeInTheDocument();
+    });
+
+    // Upload second file (720p)
+    const addClipsButton = screen.getByRole('button', { name: /add clips/i });
+    fireEvent.click(addClipsButton);
+
+    const compactFileInput = screen.getByTestId('compact-file-input'); // Assuming compact upload area has a test ID
+
+    const mockFile2 = new File(['video content'], 'hd-video.mp4', {
+      type: 'video/mp4',
+      lastModified: Date.now(),
+    });
+    Object.defineProperty(mockFile2, 'size', { value: 500 * 1024 });
+
+    if (compactFileInput) {
+      Object.defineProperty(compactFileInput, 'files', {
+        value: [mockFile2],
+        writable: false,
+      });
+      fireEvent.change(compactFileInput);
+    }
+    
+    // Check for the warning message
+    await waitFor(() => {
+      expect(screen.getByText(/mixed resolutions detected/i)).toBeInTheDocument();
+    }, { timeout: 5000 });
   });
 });

@@ -5,7 +5,9 @@ export type VideoFile = z.infer<typeof VideoFileSchemaValidator>;
 
 export type TimelineClip = z.infer<typeof TimelineClipSchemaValidator>;
 
-export type ProjectState = z.infer<typeof ProjectSchemaValidator>;
+export type ProjectState = z.infer<typeof ProjectSchemaValidator> & {
+  resolutionMismatch: boolean; // Indicates if clips with different resolutions have been added
+};
 
 export type ExportSettings = z.infer<typeof ExportSettingsSchemaValidator>;
 

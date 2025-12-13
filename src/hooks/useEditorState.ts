@@ -39,12 +39,14 @@ const initialState: ProjectState = {
   version: '1.0.0', // Initial version
   createdAt: Date.now(),
   updatedAt: Date.now(),
+  resolutionMismatch: false, // Initialize resolutionMismatch
 };
 
 export function useEditorState() {
   const [state, setState] = useState<ProjectState>(initialState);
   const [isLoading, setIsLoading] = useState(true);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [originalFiles, setOriginalFiles] = useState<Map<string, File>>(new Map());
 
   // Load project from IndexedDB on mount
   useEffect(() => {
@@ -65,6 +67,7 @@ export function useEditorState() {
                 ...project.playbackState,
                 isPlaying: false, // Always start paused
               },
+              resolutionMismatch: project.resolutionMismatch ?? false, // Initialize resolutionMismatch
             }));
           } catch (error) {
             console.warn('Failed to load project from IndexedDB, falling back to localStorage:', error);
@@ -79,6 +82,7 @@ export function useEditorState() {
                   ...parsed.playbackState,
                   isPlaying: false,
                 },
+                resolutionMismatch: parsed.resolutionMismatch ?? false, // Initialize resolutionMismatch
               }));
             }
           }
@@ -94,6 +98,7 @@ export function useEditorState() {
                 ...parsed.playbackState,
                 isPlaying: false,
               },
+              resolutionMismatch: parsed.resolutionMismatch ?? false, // Initialize resolutionMismatch
             }));
           }
         }
@@ -198,6 +203,7 @@ export function useEditorState() {
           version: state.version,
           createdAt: state.createdAt,
           updatedAt: Date.now(),
+          resolutionMismatch: state.resolutionMismatch,
         };
         localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
         
@@ -218,6 +224,7 @@ export function useEditorState() {
             version: state.version,
             createdAt: state.createdAt,
             updatedAt: Date.now(),
+            resolutionMismatch: state.resolutionMismatch,
           };
           localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
         } catch (fallbackError) {
@@ -229,13 +236,54 @@ export function useEditorState() {
     saveProject();
   }, [state.files, state.timeline, state.exportSettings, state.playbackState, state.name, state.description, isLoading]);
 
-  const addFiles = useCallback(async (videoFiles: VideoFile[]) => {
+  // Helper function to add a single file to the timeline
+  const addFileToTimelineInternal = useCallback((
+    currentTimeline: ProjectState['timeline'],
+    currentFiles: VideoFile[],
+    fileId: string
+  ): { updatedTimeline: ProjectState['timeline']; updatedFiles: VideoFile[] } => {
+    const file = currentFiles.find(f => f.id === fileId);
+    if (!file) {
+      console.warn(`File with ID ${fileId} not found for timeline addition.`);
+      return { updatedTimeline: currentTimeline, updatedFiles: currentFiles };
+    }
+
+    const lastClip = currentTimeline.clips[currentTimeline.clips.length - 1];
+    const startTime = lastClip ? lastClip.startTime + lastClip.duration : 0;
+
+    const newClip: TimelineClip = {
+      id: `clip-${Date.now()}`,
+      fileId: file.id,
+      startTime,
+      duration: file.duration,
+      order: currentTimeline.clips.length,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+
+    const updatedClips = [...currentTimeline.clips, newClip];
+    const newTotalDuration = updatedClips.reduce((acc, clip) => acc + clip.duration, 0);
+
+    const updatedFiles = currentFiles.map(f =>
+      f.id === fileId ? { ...f, status: VideoFileStatus.ON_TIMELINE, updatedAt: Date.now() } : f
+    );
+
+    return {
+      updatedTimeline: {
+        ...currentTimeline,
+        clips: updatedClips,
+        totalDuration: newTotalDuration,
+        updatedAt: Date.now(),
+      },
+      updatedFiles,
+    };
+  }, []);
+
+  const addFiles = useCallback(async (videoFiles: VideoFile[], originalFilesMap?: Map<string, File>) => {
     // Save video files to IndexedDB
     try {
       for (const file of videoFiles) {
         if (file.indexedDBKey) {
-          // File blob should be stored separately
-          // For now, we'll just store the metadata
           await storageService.saveThumbnail(file.id, file.thumbnail);
         }
       }
@@ -243,12 +291,58 @@ export function useEditorState() {
       console.error('Failed to save video files to storage:', error);
     }
 
-    setState(prev => ({
-      ...prev,
-      files: [...prev.files, ...videoFiles],
-      updatedAt: Date.now(),
-    }));
-  }, []);
+    // Store original File objects if provided
+    if (originalFilesMap) {
+      setOriginalFiles(prev => {
+        const newMap = new Map(prev);
+        originalFilesMap.forEach((file, id) => {
+          newMap.set(id, file);
+        });
+        return newMap;
+      });
+    }
+
+    setState(prev => {
+      let currentTimeline = prev.timeline;
+      let currentFiles = [...prev.files, ...videoFiles];
+      let resolutionMismatch = prev.resolutionMismatch; // Preserve existing mismatch status
+
+      // Check for resolution mismatch
+      if (prev.files.length > 0) {
+        const firstFile = prev.files[0];
+        for (const newFile of videoFiles) {
+          if (newFile.width !== firstFile.width || newFile.height !== firstFile.height) {
+            resolutionMismatch = true;
+            break;
+          }
+        }
+      } else if (videoFiles.length > 1) { // If no existing files, check among new files
+        const firstNewFile = videoFiles[0];
+        for (let i = 1; i < videoFiles.length; i++) {
+          const currentNewFile = videoFiles[i];
+          if (currentNewFile.width !== firstNewFile.width || currentNewFile.height !== firstNewFile.height) {
+            resolutionMismatch = true;
+            break;
+          }
+        }
+      }
+
+      // // Automatically add each new file to the timeline
+      // for (const file of videoFiles) {
+      //   const { updatedTimeline, updatedFiles } = addFileToTimelineInternal(currentTimeline, currentFiles, file.id);
+      //   currentTimeline = updatedTimeline;
+      //   currentFiles = updatedFiles;
+      // }
+
+      return {
+        ...prev,
+        files: currentFiles,
+        timeline: currentTimeline,
+        resolutionMismatch, // Update the resolutionMismatch flag
+        updatedAt: Date.now(),
+      };
+    });
+  }, [addFileToTimelineInternal]);
 
   const updateFiles = useCallback((updatedFiles: VideoFile[]) => {
     setState(prev => ({
@@ -275,40 +369,15 @@ export function useEditorState() {
 
   const addToTimeline = useCallback((fileId: string) => {
     setState(prev => {
-      const file = prev.files.find(f => f.id === fileId);
-      if (!file) return prev;
-
-      const lastClip = prev.timeline.clips[prev.timeline.clips.length - 1];
-      const startTime = lastClip ? lastClip.startTime + lastClip.duration : 0;
-
-      const newClip: TimelineClip = {
-        id: `clip-${Date.now()}`,
-        fileId: file.id,
-        startTime,
-        duration: file.duration,
-        order: prev.timeline.clips.length,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      };
-
-      const updatedClips = [...prev.timeline.clips, newClip];
-      const newTotalDuration = updatedClips.reduce((acc, clip) => acc + clip.duration, 0);
-
+      const { updatedTimeline, updatedFiles } = addFileToTimelineInternal(prev.timeline, prev.files, fileId);
       return {
         ...prev,
-        timeline: {
-          ...prev.timeline,
-          clips: updatedClips,
-          totalDuration: newTotalDuration,
-          updatedAt: Date.now(),
-        },
-        files: prev.files.map(f =>
-          f.id === fileId ? { ...f, status: VideoFileStatus.ON_TIMELINE, updatedAt: Date.now() } : f
-        ),
+        timeline: updatedTimeline,
+        files: updatedFiles,
         updatedAt: Date.now(),
       };
     });
-  }, []);
+  }, [addFileToTimelineInternal]);
 
   const removeFromTimeline = useCallback((clipId: string) => {
     setState(prev => {
@@ -501,6 +570,7 @@ export function useEditorState() {
           ...project.playbackState,
           isPlaying: false,
         },
+        resolutionMismatch: project.resolutionMismatch ?? false, // Initialize resolutionMismatch
       });
       
       localStorage.setItem(CURRENT_PROJECT_ID_KEY, projectId);
@@ -542,6 +612,7 @@ export function useEditorState() {
     state,
     isLoading,
     saveError,
+    originalFiles,
     actions: {
       addFiles,
       updateFiles,

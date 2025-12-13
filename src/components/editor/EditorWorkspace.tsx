@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { FileSidebar } from './FileSidebar';
 import { VideoPreview } from './VideoPreview';
 import { Timeline } from './Timeline';
@@ -12,11 +12,38 @@ export interface EditorWorkspaceProps {
   state: ProjectState;
   actions: ReturnType<typeof useEditorState>['actions'];
   computed: ReturnType<typeof useEditorState>['computed'];
+  originalFiles: Map<string, File>;
+  resolutionMismatch: boolean;
 }
 
-export function EditorWorkspace({ state, actions, computed }: EditorWorkspaceProps) {
+export function EditorWorkspace({ state, actions, computed, originalFiles, resolutionMismatch }: EditorWorkspaceProps) {
   console.log('[DEBUG] Rendering EditorWorkspace');
   const [isExportOpen, setIsExportOpen] = useState(false);
+  const [showResolutionWarning, setShowResolutionWarning] = useState(false);
+  const [isFadingOut, setIsFadingOut] = useState(false);
+
+  useEffect(() => {
+    if (resolutionMismatch) {
+      setShowResolutionWarning(true);
+      setIsFadingOut(false); // Ensure it's not fading out when it first appears
+
+      const timer = setTimeout(() => {
+        setIsFadingOut(true); // Start fading out after 5 seconds
+      }, 5000);
+
+      const hideTimer = setTimeout(() => {
+        setShowResolutionWarning(false); // Hide completely after fade-out
+      }, 5500); // 5000ms delay + 500ms for fade transition
+
+      return () => {
+        clearTimeout(timer);
+        clearTimeout(hideTimer);
+      };
+    } else {
+      setShowResolutionWarning(false);
+      setIsFadingOut(false);
+    }
+  }, [resolutionMismatch]);
 
   const handleClearProject = () => {
     if (confirm('Are you sure you want to clear this project? This cannot be undone.')) {
@@ -38,6 +65,11 @@ export function EditorWorkspace({ state, actions, computed }: EditorWorkspacePro
 
   return (
     <div className="flex h-[calc(100vh-3.5rem)]">
+      {showResolutionWarning && (
+        <div className={`absolute top-0 left-0 right-0 z-50 bg-yellow-400 text-yellow-900 px-4 py-2 text-center text-sm font-medium transition-opacity duration-500 ${isFadingOut ? 'opacity-0' : 'opacity-100'}`}>
+          Videos have to be the same resolution for export to work.
+        </div>
+      )}
       {/* Left Sidebar - Files */}
       <div className="w-80 flex-shrink-0">
         <FileSidebar
@@ -46,6 +78,7 @@ export function EditorWorkspace({ state, actions, computed }: EditorWorkspacePro
           onUpdateFiles={actions.updateFiles}
           onRemoveFile={handleRemoveFile}
           onAddToTimeline={actions.addToTimeline}
+          resolutionMismatch={resolutionMismatch}
         />
       </div>
 
@@ -63,6 +96,7 @@ export function EditorWorkspace({ state, actions, computed }: EditorWorkspacePro
             outputDuration={computed.outputDuration}
             onTimeChange={actions.setCurrentTime}
             onTogglePlayback={actions.togglePlayback}
+            originalFiles={originalFiles}
           />
         </div>
 

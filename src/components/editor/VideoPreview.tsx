@@ -1,10 +1,11 @@
-import React, { lazy, Suspense } from 'react';
-import { Play, Pause, Volume2, VolumeX, Maximize2 } from 'lucide-react';
+import React, { lazy, Suspense, useMemo } from 'react';
+import { Play, Pause, Volume2, VolumeX, Maximize2, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { Badge } from '@/components/ui/badge';
 import { formatDuration } from '@/data/sampleData';
 import { TimelineClip, VideoFile } from '@/types/editor';
+import { VideoFileStatus } from '@/types/schema/VideoFile';
 import { cn } from '@/lib/utils';
 
 // Lazy load heavy components
@@ -21,6 +22,7 @@ interface VideoPreviewProps {
   outputDuration: number;
   onTimeChange: (time: number) => void;
   onTogglePlayback: () => void;
+  originalFiles: Map<string, File>;
 }
 
 export function VideoPreview({
@@ -34,7 +36,21 @@ export function VideoPreview({
   outputDuration,
   onTimeChange,
   onTogglePlayback,
+  originalFiles,
 }: VideoPreviewProps) {
+  // Check if all files on timeline are ready
+  const filesOnTimeline = useMemo(() => {
+    const fileIds = new Set(timeline.map(clip => clip.fileId));
+    return files.filter(f => fileIds.has(f.id));
+  }, [timeline, files]);
+  
+  const processingFiles = useMemo(() => {
+    return filesOnTimeline.filter(f => f.status === VideoFileStatus.PROCESSING);
+  }, [filesOnTimeline]);
+  
+  const allFilesReady = processingFiles.length === 0 && filesOnTimeline.length > 0;
+  const canPlay = allFilesReady && totalDuration > 0;
+
   return (
     <div className="flex flex-col h-full">
       {/* Video container */}
@@ -56,6 +72,7 @@ export function VideoPreview({
             onTogglePlayback={onTogglePlayback}
             onLoad={() => {}}
             onError={() => {}}
+            originalFiles={originalFiles}
           />
         </Suspense>
       </div>
@@ -84,14 +101,23 @@ export function VideoPreview({
               variant="ghost"
               size="icon"
               onClick={onTogglePlayback}
-              disabled={totalDuration === 0}
+              disabled={!canPlay}
+              title={!canPlay && processingFiles.length > 0 ? `Processing ${processingFiles.length} file(s)...` : ''}
             >
-              {isPlaying ? (
+              {!canPlay && processingFiles.length > 0 ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : isPlaying ? (
                 <Pause className="w-5 h-5" />
               ) : (
                 <Play className="w-5 h-5" />
               )}
             </Button>
+            
+            {!canPlay && processingFiles.length > 0 && (
+              <span className="text-xs text-muted-foreground">
+                Processing {processingFiles.length} file{processingFiles.length > 1 ? 's' : ''}...
+              </span>
+            )}
 
             <Button variant="ghost" size="icon" disabled>
               <VolumeX className="w-4 h-4" />

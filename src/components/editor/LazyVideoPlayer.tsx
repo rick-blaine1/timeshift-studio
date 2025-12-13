@@ -16,6 +16,7 @@ interface LazyVideoPlayerProps {
   onTogglePlayback: () => void;
   onLoad: () => void;
   onError: (error: string) => void;
+  originalFiles: Map<string, File>;
 }
 
 export default function LazyVideoPlayer({
@@ -30,6 +31,7 @@ export default function LazyVideoPlayer({
   onTogglePlayback,
   onLoad,
   onError,
+  originalFiles,
 }: LazyVideoPlayerProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const workerRef = useRef<Worker | null>(null);
@@ -41,6 +43,12 @@ export default function LazyVideoPlayer({
   // Video elements managed in main thread (not in worker!)
   const videoElementsRef = useRef<Map<string, HTMLVideoElement>>(new Map());
   const videoUrlsRef = useRef<Map<string, string>>(new Map());
+  const originalFilesRef = useRef<Map<string, File>>(new Map());
+
+  // Sync originalFiles to ref whenever it changes
+  useEffect(() => {
+    originalFilesRef.current = originalFiles;
+  }, [originalFiles]);
 
   // Initialize Web Worker
   useEffect(() => {
@@ -132,7 +140,7 @@ export default function LazyVideoPlayer({
       // Find the file
       const file = files.find(f => f.id === fileId);
       if (!file) {
-        console.error('[LazyVideoPlayer] File not found:', fileId);
+        console.error('[LazyVideoPlayer] File not found:', fileId, 'Current files in state:', files.map(f => f.id));
         return;
       }
 
@@ -149,7 +157,12 @@ export default function LazyVideoPlayer({
         // Load the video file
         let videoUrl = videoUrlsRef.current.get(fileId);
         if (!videoUrl) {
-          if (file.fileHandle) {
+          // Try original File object first (for immediate playback before IndexedDB storage completes)
+          const originalFile = originalFilesRef.current.get(fileId);
+          if (originalFile) {
+            console.log('[LazyVideoPlayer] Loading from original File object');
+            videoUrl = URL.createObjectURL(originalFile);
+          } else if (file.fileHandle) {
             console.log('[LazyVideoPlayer] Loading from fileHandle');
             const fileData = await file.fileHandle.getFile();
             videoUrl = URL.createObjectURL(fileData);
@@ -177,16 +190,42 @@ export default function LazyVideoPlayer({
         videoElementsRef.current.set(fileId, videoElement);
       }
 
-      // Seek to the correct time
-      if (Math.abs(videoElement.currentTime - time) > 0.1) {
+      // Seek to the correct time - use smaller threshold for smoother playback
+      const seekThreshold = 0.05; // seconds - smaller threshold for better accuracy
+      if (Math.abs(videoElement.currentTime - time) > seekThreshold) {
         videoElement.currentTime = time;
+        
+        // Wait for seek to complete with shorter timeout for smoother playback
         await new Promise<void>((resolve) => {
-          videoElement!.onseeked = () => resolve();
-          setTimeout(resolve, 100); // Fallback timeout
+          const timeoutId = setTimeout(() => {
+            resolve();
+          }, 100); // Shorter timeout for faster frame delivery
+          
+          videoElement!.onseeked = () => {
+            clearTimeout(timeoutId);
+            resolve();
+          };
+          
+          videoElement!.onerror = () => {
+            clearTimeout(timeoutId);
+            resolve();
+          };
         });
       }
 
-      // Create a canvas and draw the frame
+      // Wait for video to be ready to draw - but don't wait too long
+      if (videoElement.readyState < 2) {
+        await new Promise<void>((resolve) => {
+          const timeoutId = setTimeout(resolve, 50); // Very short timeout
+          
+          videoElement!.oncanplay = () => {
+            clearTimeout(timeoutId);
+            resolve();
+          };
+        });
+      }
+
+      // Only draw if we have data - otherwise skip this frame
       if (videoElement.readyState >= 2) {
         const offscreen = new OffscreenCanvas(canvasWidth, canvasHeight);
         const ctx = offscreen.getContext('2d');
@@ -224,9 +263,9 @@ export default function LazyVideoPlayer({
             }, [bitmap]); // Transfer the bitmap instead of cloning
           }
         }
-      } else {
-        console.warn('[LazyVideoPlayer] Video not ready, readyState:', videoElement.readyState);
       }
+      // If video not ready, just skip this frame - don't send black frame
+      // The previous frame will remain visible which is better than flashing black
     } catch (error) {
       console.error('[LazyVideoPlayer] Error handling frame request:', error);
     }
@@ -238,16 +277,35 @@ export default function LazyVideoPlayer({
       isWorkerReady,
       timelineLength: timeline.length,
       filesLength: files.length,
-      hasWorker: !!workerRef.current
+      hasWorker: !!workerRef.current,
+      timelineSnapshot: timeline.map(c => ({ id: c.id, fileId: c.fileId, startTime: c.startTime, duration: c.duration })),
+      filesSnapshot: files.map(f => ({ id: f.id, name: f.name, indexedDBKey: f.indexedDBKey, fileHandle: !!f.fileHandle })),
+      workerRefCurrent: workerRef.current
     });
     
-    if (isWorkerReady && workerRef.current && timeline.length > 0 && files.length > 0) {
-      console.log('[LazyVideoPlayer] Sending timeline to worker');
+    // Always send init_preview when timeline or files change, regardless of isWorkerReady state.
+    // The worker handles its own initialization (worker_ready) upon receiving the first init_preview.
+    if (workerRef.current && (timeline.length > 0 || files.length > 0)) {
+      console.log('[LazyVideoPlayer] Sending init_preview to worker with:', {
+        isWorkerReady,
+        timelineCount: timeline.length,
+        filesCount: files.length,
+        previewQuality,
+        currentTimeline: timeline, // Add full timeline content for debugging
+        currentFiles: files,     // Add full files content for debugging
+      });
       workerRef.current.postMessage({
         type: 'init_preview',
         timeline,
         files,
         previewQuality,
+      });
+    } else {
+      console.log('[LazyVideoPlayer] Not sending init_preview (empty timeline/files or no worker):', {
+        isWorkerReady,
+        timelineLength: timeline.length,
+        filesLength: files.length,
+        hasWorker: !!workerRef.current
       });
     }
   }, [isWorkerReady, timeline, files, previewQuality]);

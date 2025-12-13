@@ -10,9 +10,10 @@ interface FileSidebarProps {
   onRemoveFile: (fileId: string) => void;
   onAddToTimeline: (fileId: string) => void;
   onSpeedChange?: (fileId: string, speed: number) => void;
+  resolutionMismatch: boolean; // New prop for resolution mismatch warning
 }
 
-export function FileSidebar({ files, onAddFiles, onUpdateFiles, onRemoveFile, onAddToTimeline, onSpeedChange }: FileSidebarProps) {
+export function FileSidebar({ files, onAddFiles, onUpdateFiles, onRemoveFile, onAddToTimeline, onSpeedChange, resolutionMismatch }: FileSidebarProps) {
   return (
     <div className="flex flex-col h-full bg-card border-r">
       <div className="p-4 border-b">
@@ -49,6 +50,7 @@ export function FileSidebar({ files, onAddFiles, onUpdateFiles, onRemoveFile, on
           onFilesAdded={onAddFiles}
           onFilesUpdated={onUpdateFiles}
           variant="compact"
+          resolutionMismatch={resolutionMismatch}
         />
       </div>
     </div>

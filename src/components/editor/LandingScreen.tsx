@@ -11,7 +11,7 @@ interface LandingScreenProps {
   onLoadSample: () => void;
 }
 
-export function LandingScreen({ onFilesAdded, onFilesUpdated, onLoadSample }: LandingScreenProps) {
+export function LandingScreen({ onFilesAdded, onFilesUpdated, onLoadSample, resolutionMismatch }: LandingScreenProps) {
   const [isDragging, setIsDragging] = useState(false);
   const { fileInputRef, handleFiles, handleInputChange, handleClick } = useFileUpload({
     onFilesAdded,
@@ -102,6 +102,12 @@ export function LandingScreen({ onFilesAdded, onFilesUpdated, onLoadSample }: La
               <Upload className="w-4 h-4 mr-2" />
               Choose Files
             </Button>
+            {resolutionMismatch && (
+              <div className="flex items-center gap-2 text-warning mt-4">
+                <AlertCircle className="w-5 h-5" />
+                <p className="text-sm">Mixed resolutions detected. For export, all clips must have the same resolution.</p>
+              </div>
+            )}
 
             <p className="text-xs text-muted-foreground mt-6 flex items-center gap-1">
               <span className="inline-block w-2 h-2 rounded-full bg-success" />

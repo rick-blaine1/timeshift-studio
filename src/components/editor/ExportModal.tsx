@@ -54,6 +54,9 @@ export function ExportModal({
 }: ExportModalProps) {
   const [status, setStatus] = useState<ExportStatus>('idle');
   const [progress, setProgress] = useState(0);
+  const [currentFrame, setCurrentFrame] = useState<number>(0);
+  const [currentFps, setCurrentFps] = useState<number>(0);
+  const [frameProgressLog, setFrameProgressLog] = useState<string>('');
   const [exportedBlob, setExportedBlob] = useState<Blob | null>(null);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [errorSuggestions, setErrorSuggestions] = useState<string[]>([]);
@@ -70,6 +73,9 @@ export function ExportModal({
       
       setStatus('idle');
       setProgress(0);
+      setCurrentFrame(0);
+      setCurrentFps(0);
+      setFrameProgressLog('');
       setExportedBlob(null);
       setErrorMessage('');
       setErrorSuggestions([]);
@@ -97,6 +103,9 @@ export function ExportModal({
     try {
       setStatus('preparing');
       setProgress(0);
+      setCurrentFrame(0);
+      setCurrentFps(0);
+      setFrameProgressLog('');
       setErrorMessage('');
       setErrorSuggestions([]);
 
@@ -168,6 +177,14 @@ export function ExportModal({
             setStatus('packaging');
           }
         },
+        onFrameProgress: (frame, fps, fullLogLine) => {
+          console.log('[ExportModal] Frame progress update:', { frame, fps, fullLogLine });
+          setCurrentFrame(frame);
+          setCurrentFps(fps);
+          if (fullLogLine) {
+            setFrameProgressLog(fullLogLine);
+          }
+        },
       };
 
       console.log('[ExportModal] Starting export with options:', processingOptions);
@@ -207,6 +224,9 @@ export function ExportModal({
       if ((error as Error).message === 'Export cancelled by user') {
         setStatus('idle');
         setProgress(0);
+        setCurrentFrame(0);
+        setCurrentFps(0);
+        setFrameProgressLog('');
         return;
       }
       
@@ -237,6 +257,9 @@ export function ExportModal({
       setAbortController(null);
       setStatus('idle');
       setProgress(0);
+      setCurrentFrame(0);
+      setCurrentFps(0);
+      setFrameProgressLog('');
       
       if (processingSessionId) {
         performanceMonitor.endVideoProcessing(processingSessionId);
@@ -258,6 +281,9 @@ export function ExportModal({
   const handleRetry = useCallback(() => {
     setStatus('idle');
     setProgress(0);
+    setCurrentFrame(0);
+    setCurrentFps(0);
+    setFrameProgressLog('');
     setExportedBlob(null);
     setErrorMessage('');
     setErrorSuggestions([]);
@@ -269,7 +295,6 @@ export function ExportModal({
   }, [processingSessionId]);
 
   const isExporting = ['preparing', 'encoding', 'packaging'].includes(status);
-  const isBatchMode = exportSettings.batchMode;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -317,10 +342,6 @@ export function ExportModal({
                   <span className="text-muted-foreground">Quality</span>
                   <span className="font-medium">{exportSettings.quality.charAt(0).toUpperCase() + exportSettings.quality.slice(1)}</span>
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Batch Mode</span>
-                  <span className="font-medium">{exportSettings.batchMode ? 'Enabled' : 'Disabled'}</span>
-                </div>
               </div>
 
               <div className="flex gap-3">
@@ -328,7 +349,7 @@ export function ExportModal({
                   Cancel
                 </Button>
                 <Button onClick={handleStartExport} className="flex-1">
-                  {exportSettings.batchMode ? 'Start Batch Export' : 'Start Export'}
+                  Start Export
                 </Button>
               </div>
             </>
@@ -341,9 +362,22 @@ export function ExportModal({
                 <span className="text-sm">{statusMessages[status]}</span>
               </div>
               <Progress value={progress} className="h-2" />
-              <p className="text-xs text-muted-foreground text-center">
-                {progress}% complete
-              </p>
+              <div className="space-y-1">
+                <p className="text-xs text-muted-foreground text-center">
+                  {progress}% complete
+                </p>
+                {(currentFrame > 0 || currentFps > 0) && (
+                  <p className="text-xs text-muted-foreground text-center">
+                    {currentFrame > 0 ? `Processing frame ${currentFrame.toLocaleString()}` : 'Processing frames...'}
+                    {currentFps > 0 && ` at ${currentFps.toFixed(1)} fps`}
+                  </p>
+                )}
+                {frameProgressLog && (
+                  <p className="text-xs text-muted-foreground text-center font-mono mt-1 break-all">
+                    {frameProgressLog}
+                  </p>
+                )}
+              </div>
               <Button
                 variant="outline"
                 onClick={handleCancelExport}
