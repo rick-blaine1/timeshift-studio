@@ -1,8 +1,15 @@
 # Dockerfile.production
-# Use shared base image
-FROM base AS builder
+# Base image with Node.js
+FROM node:18-alpine AS builder
 
 WORKDIR /app
+
+# Install FFmpeg and development tools (needed for build process)
+RUN apk add --no-cache \
+    ffmpeg \
+    git \
+    curl \
+    && rm -rf /var/cache/apk/*
 
 # Copy package files
 COPY package*.json ./
