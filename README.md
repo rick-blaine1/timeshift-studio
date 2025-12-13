@@ -28,7 +28,7 @@ Timeshift Studio is a modern video editing application that runs entirely in the
 1. Clone the repository and navigate into the project directory:
 
 ```bash
-git clone https://github.com/your-org/timeshift-studio.git
+git clone https://github.com/rick-blaine1/timeshift-studio.git
 cd timeshift-studio
 ```
 
