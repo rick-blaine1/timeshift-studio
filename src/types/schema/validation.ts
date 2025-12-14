@@ -18,6 +18,7 @@ export const VideoFileSchemaValidator = z.object({
   thumbnail: z.string(),
   thumbnailTimestamp: z.number(),
   status: z.nativeEnum(VideoFileStatus),
+  speedMultiplier: z.number().optional(), // Add speedMultiplier to validator
   indexedDBKey: z.string().optional(),
   fileHandle: z.any().optional(), // FileSystemFileHandle is not directly serializable/validatable by Zod
   createdAt: z.number(),

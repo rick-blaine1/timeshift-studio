@@ -161,13 +161,16 @@ export async function concatenateVideos(
         let simulatedProgress = 0;
         const progressInterval = setInterval(() => {
           simulatedProgress += 2; // Increment by 2% every interval
+          console.log(`[VideoProcessor][Clip ${clip.id}] Simulated Progress Update: simulatedProgress=${simulatedProgress}`);
           if (simulatedProgress < 90) { // Cap at 90% until actual completion
-            const mappedProgress = clipStartProgress + (simulatedProgress / 100) * progressPerClip;
+            const constrainedSimulatedProgress = Math.min(simulatedProgress, 99); // Cap simulated progress at 99
+            const mappedProgress = clipStartProgress + (constrainedSimulatedProgress / 100) * progressPerClip;
             if (options.onProgress) {
+              console.log(`[VideoProcessor][Clip ${clip.id}] Reporting Mapped Progress: ${Math.floor(mappedProgress)}`);
               options.onProgress(Math.floor(mappedProgress));
             }
           }
-        }, estimatedProcessingTime / 50); // Update 50 times during processing
+        }, estimatedProcessingTime / 100); // Update 100 times during processing for smoother animation
         
         try {
           processedBlob = await trimVideo(
@@ -180,6 +183,7 @@ export async function concatenateVideos(
               // Map trim progress to overall progress range for this clip
               const mappedProgress = clipStartProgress + (trimProgress / 100) * progressPerClip;
               if (options.onProgress) {
+                console.log(`[VideoProcessor][Clip ${clip.id}] Reporting Mapped (FFmpeg Trim) Progress: ${Math.floor(mappedProgress)} (trimProgress: ${trimProgress})`);
                 options.onProgress(Math.floor(mappedProgress));
               }
             },
@@ -187,6 +191,7 @@ export async function concatenateVideos(
           );
         } finally {
           clearInterval(progressInterval);
+          console.log(`[VideoProcessor][Clip ${clip.id}] Cleared trim progress interval.`);
         }
       }
 
@@ -220,13 +225,18 @@ export async function concatenateVideos(
       
       concatProgressInterval = setInterval(() => {
         simulatedConcatProgress += 2; // Increment by 2% every interval
+        console.log(`[VideoProcessor][Concat] Simulated Progress Update: simulatedConcatProgress=${simulatedConcatProgress}`);
         if (simulatedConcatProgress < 90) { // Cap at 90% until actual completion
           // Report the maximum of simulated or native progress
-          const effectiveProgress = Math.max(simulatedConcatProgress, nativeConcatProgress);
+          const constrainedSimulatedProgress = Math.min(simulatedConcatProgress, 99); // Cap simulated progress at 99
+          const effectiveProgress = Math.max(constrainedSimulatedProgress, nativeConcatProgress);
           const mappedProgress = concatStartProgress + (effectiveProgress / 100) * (concatEndProgress - concatStartProgress);
-          options.onProgress(Math.floor(mappedProgress));
+          if (options.onProgress) {
+            console.log(`[VideoProcessor][Concat] Reporting Mapped Progress: ${Math.floor(mappedProgress)} (simulated: ${simulatedConcatProgress}, native: ${nativeConcatProgress})`);
+            options.onProgress(Math.floor(mappedProgress));
+          }
         }
-      }, estimatedConcatDuration / 50); // Update 50 times during processing
+      }, estimatedConcatDuration / 100); // Update 100 times during processing for smoother animation
     }
 
     let resultBlob: Blob;
@@ -241,16 +251,20 @@ export async function concatenateVideos(
         (nativeProgress) => {
           // Update native progress from FFmpeg
           nativeConcatProgress = nativeProgress;
+          console.log(`[VideoProcessor][Concat] Native FFmpeg Progress: ${nativeConcatProgress}`);
           // Report the maximum of simulated or native progress
-          const effectiveProgress = Math.max(simulatedConcatProgress, nativeConcatProgress);
+          const constrainedSimulatedProgress = Math.min(simulatedConcatProgress, 99); // Cap simulated progress at 99
+          const effectiveProgress = Math.max(constrainedSimulatedProgress, nativeConcatProgress);
           const mappedProgress = concatStartProgress + (effectiveProgress / 100) * (concatEndProgress - concatStartProgress);
           if (options.onProgress) {
+            console.log(`[VideoProcessor][Concat] Reporting Mapped (FFmpeg Concat) Progress: ${Math.floor(mappedProgress)} (simulated: ${simulatedConcatProgress}, native: ${nativeConcatProgress})`);
             options.onProgress(Math.floor(mappedProgress));
           }
         },
         options.onFrameProgress
       );
       if (options.onProgress) {
+        console.log(`[VideoProcessor][Concat] Explicitly reporting concatEndProgress: ${concatEndProgress}`);
         options.onProgress(concatEndProgress); // Jump to end of concat range
       }
     } finally {
@@ -283,13 +297,18 @@ export async function concatenateVideos(
         
         transcodeProgressInterval = setInterval(() => {
           simulatedTranscodeProgress += 2; // Increment by 2% every interval
+          console.log(`[VideoProcessor][Transcode] Simulated Progress Update: simulatedTranscodeProgress=${simulatedTranscodeProgress}`);
           if (simulatedTranscodeProgress < 90) { // Cap at 90% until actual completion
             // Report the maximum of simulated or native progress
-            const effectiveProgress = Math.max(simulatedTranscodeProgress, nativeTranscodeProgress);
+            const constrainedSimulatedProgress = Math.min(simulatedTranscodeProgress, 99); // Cap simulated progress at 99
+            const effectiveProgress = Math.max(constrainedSimulatedProgress, nativeTranscodeProgress);
             const mappedProgress = transcodeStartProgress + (effectiveProgress / 100) * (transcodeEndProgress - transcodeStartProgress);
-            options.onProgress(Math.floor(mappedProgress));
+            if (options.onProgress) {
+              console.log(`[VideoProcessor][Transcode] Reporting Mapped Progress: ${Math.floor(mappedProgress)} (simulated: ${simulatedTranscodeProgress}, native: ${nativeTranscodeProgress})`);
+              options.onProgress(Math.floor(mappedProgress));
+            }
           }
-        }, estimatedTranscodeDuration / 50); // Update 50 times during processing
+        }, estimatedTranscodeDuration / 100); // Update 100 times during processing for smoother animation
       }
 
       try {
@@ -301,16 +320,20 @@ export async function concatenateVideos(
           onProgress: (nativeProgress) => {
             // Update native progress from FFmpeg
             nativeTranscodeProgress = nativeProgress;
+            console.log(`[VideoProcessor][Transcode] Native FFmpeg Progress: ${nativeTranscodeProgress}`);
             // Report the maximum of simulated or native progress
-            const effectiveProgress = Math.max(simulatedTranscodeProgress, nativeTranscodeProgress);
+            const constrainedSimulatedProgress = Math.min(simulatedTranscodeProgress, 99); // Cap simulated progress at 99
+            const effectiveProgress = Math.max(constrainedSimulatedProgress, nativeTranscodeProgress);
             const mappedProgress = transcodeStartProgress + (effectiveProgress / 100) * (transcodeEndProgress - transcodeStartProgress);
             if (options.onProgress) {
+              console.log(`[VideoProcessor][Transcode] Reporting Mapped (FFmpeg Transcode) Progress: ${Math.floor(mappedProgress)} (simulated: ${simulatedTranscodeProgress}, native: ${nativeTranscodeProgress})`);
               options.onProgress(Math.floor(mappedProgress));
             }
           },
           onFrameProgress: options.onFrameProgress
         });
         if (options.onProgress) {
+          console.log(`[VideoProcessor][Transcode] Explicitly reporting transcodeEndProgress: ${transcodeEndProgress}`);
           options.onProgress(transcodeEndProgress); // Jump to end of transcode range
         }
       } finally {
@@ -324,12 +347,14 @@ export async function concatenateVideos(
       console.log('[VideoProcessor] Skipping transcode (already mp4 medium quality)');
       // Still report progress to 95% even if we skip transcode
       if (options.onProgress) {
+        console.log('[VideoProcessor] Skipping transcode, explicitly reporting 95% progress.');
         options.onProgress(95);
       }
     }
 
     // Report completion
     if (options.onProgress) {
+      console.log('[VideoProcessor] Explicitly reporting final 100% progress.');
       options.onProgress(100);
     }
 
