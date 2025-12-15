@@ -46,6 +46,15 @@ export enum ErrorCodes {
   CONCAT_FAILED = 'CONCAT_FAILED',
   TRANSCODE_FAILED = 'TRANSCODE_FAILED',
   
+  // WebCodecs Errors
+  WEBCODECS_NOT_SUPPORTED = 'WEBCODECS_NOT_SUPPORTED',
+  WEBCODECS_INIT_FAILED = 'WEBCODECS_INIT_FAILED',
+  WEBCODECS_DECODE_FAILED = 'WEBCODECS_DECODE_FAILED',
+  WEBCODECS_ENCODE_FAILED = 'WEBCODECS_ENCODE_FAILED',
+  WEBCODECS_CONFIG_FAILED = 'WEBCODECS_CONFIG_FAILED',
+  CODEC_NOT_SUPPORTED = 'CODEC_NOT_SUPPORTED',
+  INVALID_CODEC_STATE = 'INVALID_CODEC_STATE',
+  
   // Storage Errors
   STORAGE_QUOTA_EXCEEDED = 'STORAGE_QUOTA_EXCEEDED',
   STORAGE_ACCESS_DENIED = 'STORAGE_ACCESS_DENIED',
@@ -74,6 +83,20 @@ export function getUserFriendlyErrorMessage(error: Error): string {
         return 'Video processing failed. Please try reducing the video quality or file size.';
       case ErrorCodes.ENCODING_FAILED:
         return 'Failed to encode the video. Please try a different export format.';
+      case ErrorCodes.WEBCODECS_NOT_SUPPORTED:
+        return 'Your browser does not support hardware-accelerated video processing. Using fallback mode.';
+      case ErrorCodes.WEBCODECS_INIT_FAILED:
+        return 'Failed to initialize video processor. Switching to compatibility mode.';
+      case ErrorCodes.WEBCODECS_DECODE_FAILED:
+        return 'Failed to decode video. Trying alternative processing method.';
+      case ErrorCodes.WEBCODECS_ENCODE_FAILED:
+        return 'Failed to encode video. Switching to fallback encoder.';
+      case ErrorCodes.WEBCODECS_CONFIG_FAILED:
+        return 'Video codec configuration failed. Using alternative settings.';
+      case ErrorCodes.CODEC_NOT_SUPPORTED:
+        return 'This video codec is not supported by your browser. Using fallback processing.';
+      case ErrorCodes.INVALID_CODEC_STATE:
+        return 'Video processor encountered an error. Restarting with fallback method.';
       default:
         return 'An error occurred while processing the video.';
     }
@@ -129,6 +152,24 @@ export function getErrorRecoverySuggestions(error: Error): string[] {
           'Try a different export format (MP4 vs WebM)',
           'Reduce the export quality setting',
           'Try exporting fewer clips at once',
+        ];
+      case ErrorCodes.WEBCODECS_NOT_SUPPORTED:
+      case ErrorCodes.WEBCODECS_INIT_FAILED:
+      case ErrorCodes.CODEC_NOT_SUPPORTED:
+        return [
+          'Update your browser to the latest version',
+          'Try using Chrome or Edge for better hardware support',
+          'The app will automatically use a fallback method',
+        ];
+      case ErrorCodes.WEBCODECS_DECODE_FAILED:
+      case ErrorCodes.WEBCODECS_ENCODE_FAILED:
+      case ErrorCodes.WEBCODECS_CONFIG_FAILED:
+      case ErrorCodes.INVALID_CODEC_STATE:
+        return [
+          'The app is automatically retrying with a different method',
+          'Close other browser tabs to free up resources',
+          'Try with a smaller video file',
+          'Restart your browser if the issue persists',
         ];
     }
   }
@@ -214,10 +255,17 @@ export async function retryWithBackoff<T>(
         throw lastError;
       }
       
-      // Don't retry certain types of errors
-      if (error instanceof VideoProcessingError && 
-          [ErrorCodes.UNSUPPORTED_FORMAT, ErrorCodes.CORRUPTED_FILE].includes(error.code as ErrorCodes)) {
-        throw error;
+      // Don't retry certain types of errors that are permanent
+      if (error instanceof VideoProcessingError) {
+        const nonRetryableErrors = [
+          ErrorCodes.UNSUPPORTED_FORMAT,
+          ErrorCodes.CORRUPTED_FILE,
+          ErrorCodes.WEBCODECS_NOT_SUPPORTED,
+          ErrorCodes.CODEC_NOT_SUPPORTED,
+        ];
+        if (nonRetryableErrors.includes(error.code as ErrorCodes)) {
+          throw error;
+        }
       }
       
       // Exponential backoff

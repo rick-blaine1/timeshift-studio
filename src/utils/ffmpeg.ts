@@ -441,3 +441,54 @@ export async function transcodeVideo(
     }
    }
 }
+
+/**
+ * Get a thumbnail from a video at a specific timestamp.
+ */
+export async function getThumbnail(
+  input: File | Blob,
+  timestamp: number, // in seconds
+  outputName: string = 'thumbnail.jpg'
+): Promise<Blob> {
+  const ffmpeg = await initFFmpeg();
+  const inputName = 'input.mp4';
+
+  console.log(`[FFmpeg] Generating thumbnail from ${inputName} at ${timestamp}s`);
+
+  try {
+    const arrayBuffer = await input.arrayBuffer();
+    ffmpeg.FS('writeFile', inputName, new Uint8Array(arrayBuffer));
+
+    const command = [
+      '-ss', timestamp.toString(),
+      '-i', inputName,
+      '-vframes', '1',
+      outputName,
+    ];
+
+    console.log('[FFmpeg] Executing thumbnail command:', command.join(' '));
+
+    await ffmpeg.run(...command);
+
+    console.log('[FFmpeg] Thumbnail generation complete');
+    const data = ffmpeg.FS('readFile', outputName);
+    return new Blob([data.buffer], { type: 'image/jpeg' });
+  } catch (error) {
+    throw new VideoProcessingError(
+      'Thumbnail generation failed',
+      ErrorCodes.THUMBNAIL_FAILED,
+      error
+    );
+  } finally {
+    try {
+      ffmpeg.FS('unlink', inputName);
+    } catch (e) {
+      console.warn('[FFmpeg] Failed to delete', inputName, e);
+    }
+    try {
+      ffmpeg.FS('unlink', outputName);
+    } catch (e) {
+      console.warn('[FFmpeg] Failed to delete', outputName, e);
+    }
+  }
+}
